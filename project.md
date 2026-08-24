@@ -18,22 +18,26 @@
 
 ## Sprint Plan (10 Days)
 
-### Day 1 — Foundation & PostgreSQL ✅ SCAFFOLDED
+### Day 1 — Foundation & PostgreSQL ✅ COMPLETE
 - [x] Project structure created
 - [x] pyproject.toml with dependencies
 - [x] config.yaml with all settings
 - [x] SQLAlchemy models (SourceTransaction, CanonicalTransaction, Match, Exception, Resolution, CashPosition, ForecastEntry, AuditLog)
 - [x] Database session management
-- [x] Pydantic Settings with YAML loading
-- [x] LLMProvider abstraction (MockProvider, OllamaProvider, GroqProvider)
+- [x] Pydantic Settings with YAML loading + env var resolution
+- [x] LLMProvider abstraction (MockProvider, OllamaProvider, GroqProvider, OpenAICompatibleProvider)
 - [x] FastAPI app with routers
+- [x] PostgreSQL installed, database `ai_finance` created, user `finance_user` with privileges
+- [x] Alembic migrations run - all tables created
+- [x] Synthetic data generated: 120 base transactions with 10 discrepancy types (361 total source records)
+- [x] Data loaded into PostgreSQL: 117 bank, 122 ledger, 122 processor records
 
-### Day 2 — Synthetic Data Generator 📋 READY TO BUILD
-- [ ] scripts/generate_data.py (deterministic, seeded, 120 records)
-- [ ] Distribution: 70 clean, 12 fee, 8 date, 6 missing ledger, 5 missing bank, 6 duplicate, 4 ref, 2 currency, 4 ambiguous, 5 processor fee
-- [ ] CSV outputs: bank.csv, ledger.csv, processor.csv
-- [ ] Ground truth: ground_truth.csv + ground_truth.parquet
-- [ ] scripts/load_data.py for PostgreSQL import
+### Day 2 — Synthetic Data Generator ✅ COMPLETE
+- [x] scripts/generate_data.py (deterministic, seeded, 120 records)
+- [x] Distribution: 70 clean, 12 fee, 8 date, 6 missing ledger, 5 missing bank, 6 duplicate, 4 ref, 2 currency, 4 ambiguous, 5 processor fee
+- [x] CSV outputs: bank.csv, ledger.csv, processor.csv
+- [x] Ground truth: ground_truth.csv + ground_truth.parquet
+- [x] scripts/load_data.py for PostgreSQL import
 
 ### Day 3 — Normalization & Canonical Model
 - [ ] CanonicalTransaction Pydantic model
@@ -90,38 +94,40 @@
 - [ ] Fresh DB end-to-end test
 - [ ] Submission package preparation
 
-## Files Created (Scaffold)
+## Files Created & Tested
 
 ### Configuration
 - `pyproject.toml` - Dependencies, tool config
 - `config.yaml` - All settings (matching, AI, forecast, DB)
 - `.env.example` - Environment variables template
 
-### Backend Structure
+### Backend Structure (Scaffolded + Migration-Ready)
 ```
 backend/app/
 ├── main.py                 # FastAPI entry with lifespan
-├── config.py               # Pydantic Settings from YAML
+├── config.py               # Pydantic Settings from YAML + env resolution
 ├── db/
-│   ├── session.py          # Async engine, session, Base
-│   └── models.py           # All SQLAlchemy models
+│   ├── base.py             # DeclarativeBase (no circular imports)
+│   ├── session.py          # Async engine, session
+│   ├── models.py           # All SQLAlchemy models
+│   └── migrations/         # Alembic config (env.py, script.py.mako)
 ├── schemas/
-│   └── canonical.py        # All Pydantic schemas
+│   └── canonical.py        # All Pydantic schemas (txn_metadata, audit_metadata)
 ├── api/
 │   └── transactions.py     # All REST endpoints
 ├── services/
-│   ├── llm_providers.py    # LLMProvider + Mock/Ollama/Groq
-│   ├── matching.py         # ReconciliationEngine
+│   ├── llm_providers.py    # LLMProvider + Mock/Ollama/Groq/OpenAICompatible
+│   ├── matching.py         # ReconciliationEngine (3-stage matching)
 │   ├── cash_engine.py      # CashEngine + forecasting
-│   ├── ai_investigator.py  # AIInvestigator with tools
-│   └── normalization.py    # Normalizer
+│   ├── ai_investigator.py  # AIInvestigator with 4 tools
+│   └── normalization.py    # Normalizer (counterparty, reference, amount, date)
 └── evaluation/
-    └── metrics.py          # EvaluationEngine
+    └── metrics.py          # EvaluationEngine (ground truth comparison)
 ```
 
-### Data Scripts
-- `scripts/generate_data.py` - Deterministic synthetic data generator
-- `scripts/load_data.py` - CSV → PostgreSQL loader
+### Data Scripts (Tested & Working)
+- `scripts/generate_data.py` - Deterministic synthetic data generator (120 base txns)
+- `scripts/load_data.py` - CSV → PostgreSQL loader (handles duplicates via invoice_id)
 
 ### Dashboard
 - `dashboard/app.py` - Complete Streamlit app with 5 tabs
@@ -134,6 +140,7 @@ backend/app/
 ### Documentation
 - `README.md` - Full project documentation
 - `NEXTJS_MIGRATION.md` - Detailed migration guide
+- `project.md` - This log
 
 ## Key Implementation Details
 
@@ -169,15 +176,36 @@ Variance = Bank Cash - Expected Cash
 
 ## Next Steps (Priority Order)
 
-1. **Install PostgreSQL** and create `ai_finance` database
-2. **Install Ollama** and pull `llama3.1:8b` (or configure Groq API key)
-3. **Run data generation**: `python scripts/generate_data.py`
-4. **Load data**: `python scripts/load_data.py`
-5. **Start backend**: `uvicorn backend.app.main:app --reload`
-6. **Start dashboard**: `streamlit run dashboard/app.py`
-7. **Test reconciliation** via API or dashboard
-8. **Iterate on matching weights** based on baseline metrics
-9. **Test AI investigator** with MockProvider first, then Ollama
+1. **Day 1 Evening**: Start backend API
+   ```bash
+   uvicorn backend.app.main:app --reload --port 8000
+   ```
+   Verify at http://localhost:8000/docs and `/health`
+
+2. **Day 2 — Normalization & Canonical Model**
+   - [ ] CanonicalTransaction normalization pipeline per source
+   - [ ] Run normalization on loaded data
+   - [ ] Unit tests for normalization edge cases
+
+3. **Day 3 — Deterministic Reconciliation Engine** ⚡ CORE
+   - [ ] Stage 1: Exact matching (reference + amount + currency)
+   - [ ] Stage 2: Strong matching (amount + counterparty + date window)
+   - [ ] Stage 3: Fuzzy matching (RapidFuzz weighted scoring)
+   - [ ] Configurable weights/thresholds from config.yaml
+   - [ ] Exception creation with types
+   - [ ] Baseline evaluation vs ground truth (target: >85% match rate, <3% false match)
+
+4. **Day 4 — Cash Position Engine** ...
+
+5. **Day 5 — AI Investigator Agent** ⚡ CORE ...
+
+6. **Day 6 — Full Pipeline Integration & Evaluation** ...
+
+7. **Day 7 — Streamlit Dashboard** ⚡ VISIBLE OUTPUT ...
+
+8. **Day 8 — Polish & Demo Prep** ...
+
+9. **Day 9 — Buffer & Final QA** ...
 
 ## Competition Differentiators (Built In)
 
@@ -202,9 +230,15 @@ Variance = Bank Cash - Expected Cash
 To resume in a new session:
 1. Read this `project.md` file
 2. Check `config.yaml` for current settings
-3. Run `python scripts/generate_data.py` to regenerate data if needed
-4. Continue from the next unchecked item in the sprint plan above
+3. `.env` already configured with `DB_PASSWORD=finance_pass`
+4. PostgreSQL running with `ai_finance` database, `finance_user`/`finance_pass`
+5. Data already loaded (361 source transactions)
+6. **Next command to run:**
+   ```bash
+   uvicorn backend.app.main:app --reload --port 8000
+   ```
+7. Then verify at http://localhost:8000/docs and continue with Day 2 (Normalization)
 
 ---
 
-*Last updated: 2026-08-24 - Scaffold complete, ready for Day 1 execution*
+*Last updated: 2026-08-25 - Day 1 Morning complete: PostgreSQL setup, migrations, data generation, and data loading all successful. 361 source transactions loaded. Ready for Day 1 Evening (backend API start).*

@@ -6,7 +6,7 @@ from sqlalchemy import (
     String, Text, Integer, Numeric, DateTime, Date, Enum, ForeignKey, Index, JSON, UniqueConstraint
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from backend.app.db.session import Base
+from backend.app.db.base import Base
 
 
 class TransactionSource(str, enum.Enum):
@@ -108,7 +108,7 @@ class CanonicalTransaction(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
     direction: Mapped[TransactionDirection] = mapped_column(Enum(TransactionDirection), nullable=False)
-    metadata: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    txn_metadata: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     source_transactions: Mapped[list["SourceTransaction"]] = relationship("SourceTransaction", back_populates="canonical")
@@ -211,4 +211,4 @@ class AuditLog(Base):
     entity_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     action: Mapped[AuditAction] = mapped_column(Enum(AuditAction), nullable=False)
     reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    metadata: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    audit_metadata: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)

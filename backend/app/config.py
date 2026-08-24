@@ -3,6 +3,34 @@ from typing import List, Optional
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic.types import SecretStr
+import os
+import re
+
+
+def resolve_env_vars(obj: Any) -> Any:
+    """Recursively resolve ${VAR} patterns in config values from environment variables."""
+    if isinstance(obj, str):
+        def replace_var(match):
+            var_name = match.group(1)
+            return os.getenv(var_name, match.group(0))
+        return re.sub(r'\$\{([^}]+)\}', replace_var, obj)
+    elif isinstance(obj, dict):
+        return {k: resolve_env_vars(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [resolve_env_vars(item) for item in obj]
+    return obj
+
+
+def load_env_file():
+    """Load .env file into os.environ manually."""
+    env_path = Path(__file__).parent.parent.parent / ".env"
+    if env_path.exists():
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
+                    os.environ.setdefault(key.strip(), value.strip())
 
 
 class MatchingWeights(BaseSettings):
@@ -40,10 +68,17 @@ class GroqConfig(BaseSettings):
     model: str = "llama-3.1-8b-instant"
 
 
+class OpenAICompatibleConfig(BaseSettings):
+    base_url: Optional[str] = None
+    api_key: Optional[SecretStr] = None
+    model: str = "gpt-4o-mini"
+
+
 class AIConfig(BaseSettings):
-    provider: str = "ollama"
+    provider: str = "mock"
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
     groq: GroqConfig = Field(default_factory=GroqConfig)
+    openai_compatible: OpenAICompatibleConfig = Field(default_factory=OpenAICompatibleConfig)
     confidence_auto_resolve: float = 0.90
     max_tool_calls: int = 3
 
@@ -96,11 +131,13 @@ _settings: Optional[Settings] = None
 def get_settings() -> Settings:
     global _settings
     if _settings is None:
-        config_path = Path(__file__).parent.parent.parent.parent / "config.yaml"
+        load_env_file()
+        config_path = Path(__file__).parent.parent.parent / "config.yaml"
         if config_path.exists():
             import yaml
             with open(config_path) as f:
                 yaml_data = yaml.safe_load(f)
+            yaml_data = resolve_env_vars(yaml_data)
             _settings = Settings(**yaml_data)
         else:
             _settings = Settings()

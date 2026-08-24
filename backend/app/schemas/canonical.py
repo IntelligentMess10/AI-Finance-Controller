@@ -96,7 +96,7 @@ class CanonicalTransactionCreate(BaseModel):
     description: Optional[str] = None
     reference: Optional[str] = None
     direction: TransactionDirection
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    txn_metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class CanonicalTransactionRead(CanonicalTransactionCreate):
@@ -200,7 +200,7 @@ class AuditLogCreate(BaseModel):
     entity_id: Optional[int] = None
     action: AuditAction
     reason: Optional[str] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    audit_metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class AuditLogRead(AuditLogCreate):

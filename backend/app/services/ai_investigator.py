@@ -93,12 +93,29 @@ TOOLS = [
 class AIInvestigator:
     def __init__(self, config: AIConfig):
         self.config = config
-        self.provider = get_provider(
-            config.provider,
-            base_url=config.ollama.base_url,
-            model=config.ollama.model,
-            timeout=config.ollama.timeout,
-        ) if config.provider == "ollama" else get_provider("mock")
+        
+        if config.provider == "ollama":
+            self.provider = get_provider(
+                "ollama",
+                base_url=config.ollama.base_url,
+                model=config.ollama.model,
+                timeout=config.ollama.timeout,
+            )
+        elif config.provider == "groq":
+            self.provider = get_provider(
+                "groq",
+                api_key=config.groq.api_key.get_secret_value() if config.groq.api_key else "",
+                model=config.groq.model,
+            )
+        elif config.provider == "openai_compatible":
+            self.provider = get_provider(
+                "openai_compatible",
+                base_url=config.openai_compatible.base_url or "",
+                api_key=config.openai_compatible.api_key.get_secret_value() if config.openai_compatible.api_key else "",
+                model=config.openai_compatible.model,
+            )
+        else:
+            self.provider = get_provider("mock")
 
     async def investigate(self, db: AsyncSession, exception: Exception) -> Resolution:
         txn_result = await db.execute(select(CanonicalTransaction).where(CanonicalTransaction.id == exception.transaction_id))

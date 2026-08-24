@@ -89,7 +89,7 @@ class Normalizer:
             description=source_txn.description,
             reference=reference,
             direction=direction,
-            metadata={
+            txn_metadata={
                 "raw_counterparty": source_txn.counterparty,
                 "raw_reference": source_txn.reference,
                 "raw_amount": str(source_txn.amount),

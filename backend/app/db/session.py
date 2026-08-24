@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import DeclarativeBase
 from backend.app.config import get_settings
+from backend.app.db.base import Base
+from backend.app.db import models  # noqa: F401 - registers models with Base.metadata
 
 settings = get_settings()
 
@@ -11,10 +12,6 @@ DATABASE_URL = (
 
 engine = create_async_engine(DATABASE_URL, echo=settings.app.debug if hasattr(settings.app, 'debug') else False)
 async_session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-
-
-class Base(DeclarativeBase):
-    pass
 
 
 async def get_db() -> AsyncSession:

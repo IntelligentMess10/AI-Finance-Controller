@@ -7,7 +7,7 @@ database:
   host: "localhost"
   port: 5432
   name: "ai_finance"
-  user: "postgres"
+  user: "finance_user"
   password: "${DB_PASSWORD}"
 
 matching:
@@ -28,7 +28,7 @@ matching:
   amount_tolerance_pct: 0.001
 
 ai:
-  provider: "ollama"
+  provider: "mock"
   ollama:
     base_url: "http://localhost:11434"
     model: "llama3.1:8b"
@@ -36,6 +36,10 @@ ai:
   groq:
     api_key: "${GROQ_API_KEY}"
     model: "llama-3.1-8b-instant"
+  openai_compatible:
+    base_url: "${OPENAI_BASE_URL}"
+    api_key: "${OPENAI_API_KEY}"
+    model: "gpt-4o-mini"
   confidence_auto_resolve: 0.90
   max_tool_calls: 3
 

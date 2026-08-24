@@ -1,0 +1,86 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Distribution
+*.tar.gz
+*.whl
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Local data (generated)
+data/*.csv
+data/*.parquet
+data/ground_truth*
+
+# Migration versions (keep ini, env.py, script.py.mako)
+backend/app/db/migrations/versions/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Node (if frontend added)
+node_modules/
+.next/
+out/
+
+# OS specific
+*.pem

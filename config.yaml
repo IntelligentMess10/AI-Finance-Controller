@@ -1,0 +1,72 @@
+app:
+  name: "AI Finance Controller"
+  currency: "INR"
+  opening_cash: 1000000
+
+database:
+  host: "localhost"
+  port: 5432
+  name: "ai_finance"
+  user: "postgres"
+  password: "${DB_PASSWORD}"
+
+matching:
+  exact_enabled: true
+  strong_enabled: true
+  fuzzy_enabled: true
+  weights:
+    amount: 0.40
+    counterparty: 0.25
+    reference: 0.20
+    date: 0.15
+  thresholds:
+    auto_match: 0.90
+    ai_review_min: 0.70
+    ai_review_max: 0.89
+    exception: 0.70
+  date_window_days: 2
+  amount_tolerance_pct: 0.001
+
+ai:
+  provider: "ollama"
+  ollama:
+    base_url: "http://localhost:11434"
+    model: "llama3.1:8b"
+    timeout: 30
+  groq:
+    api_key: "${GROQ_API_KEY}"
+    model: "llama-3.1-8b-instant"
+  confidence_auto_resolve: 0.90
+  max_tool_calls: 3
+
+forecast:
+  horizons_days: [7, 14, 30]
+  scheduled_events:
+    - name: "Payroll"
+      amount: -500000
+      frequency: "monthly"
+      next_date: "2026-09-01"
+    - name: "Rent"
+      amount: -150000
+      frequency: "monthly"
+      next_date: "2026-09-05"
+    - name: "Vendor Payment"
+      amount: -75000
+      frequency: "weekly"
+      next_date: "2026-08-26"
+    - name: "Cloud Infrastructure"
+      amount: -120000
+      frequency: "monthly"
+      next_date: "2026-09-01"
+    - name: "Tax Payment"
+      amount: -300000
+      frequency: "quarterly"
+      next_date: "2026-09-15"
+    - name: "Customer Receipts"
+      amount: 800000
+      frequency: "monthly"
+      next_date: "2026-09-01"
+    - name: "Subscription Revenue"
+      amount: 250000
+      frequency: "monthly"
+      next_date: "2026-09-01"

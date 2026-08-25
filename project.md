@@ -32,6 +32,12 @@
 - [x] Synthetic data generated: 120 base transactions with 10 discrepancy types (361 total source records)
 - [x] Data loaded into PostgreSQL: 117 bank, 122 ledger, 122 processor records
 
+### Day 1 Evening — Backend API ✅ COMPLETE
+- [x] Backend API started on port 8000
+- [x] Health check endpoint verified (`/health` returns `{"status": "healthy"}`)
+- [x] Swagger API docs accessible at `/docs`
+- [x] All REST endpoints exposed and ready
+
 ### Day 2 — Synthetic Data Generator ✅ COMPLETE
 - [x] scripts/generate_data.py (deterministic, seeded, 120 records)
 - [x] Distribution: 70 clean, 12 fee, 8 date, 6 missing ledger, 5 missing bank, 6 duplicate, 4 ref, 2 currency, 4 ambiguous, 5 processor fee
@@ -176,18 +182,12 @@ Variance = Bank Cash - Expected Cash
 
 ## Next Steps (Priority Order)
 
-1. **Day 1 Evening**: Start backend API
-   ```bash
-   uvicorn backend.app.main:app --reload --port 8000
-   ```
-   Verify at http://localhost:8000/docs and `/health`
-
-2. **Day 2 — Normalization & Canonical Model**
-   - [ ] CanonicalTransaction normalization pipeline per source
-   - [ ] Run normalization on loaded data
+1. **Day 2 — Normalization & Canonical Model** ⚡ NEXT
+   - [ ] CanonicalTransaction normalization pipeline per source (dates, amounts, counterparty, references, direction)
+   - [ ] Run normalization on loaded data (source_transactions → canonical_transactions)
    - [ ] Unit tests for normalization edge cases
 
-3. **Day 3 — Deterministic Reconciliation Engine** ⚡ CORE
+2. **Day 3 — Deterministic Reconciliation Engine** ⚡ CORE
    - [ ] Stage 1: Exact matching (reference + amount + currency)
    - [ ] Stage 2: Strong matching (amount + counterparty + date window)
    - [ ] Stage 3: Fuzzy matching (RapidFuzz weighted scoring)
@@ -195,7 +195,7 @@ Variance = Bank Cash - Expected Cash
    - [ ] Exception creation with types
    - [ ] Baseline evaluation vs ground truth (target: >85% match rate, <3% false match)
 
-4. **Day 4 — Cash Position Engine** ...
+3. **Day 4 — Cash Position Engine** ...
 
 5. **Day 5 — AI Investigator Agent** ⚡ CORE ...
 
@@ -233,12 +233,9 @@ To resume in a new session:
 3. `.env` already configured with `DB_PASSWORD=finance_pass`
 4. PostgreSQL running with `ai_finance` database, `finance_user`/`finance_pass`
 5. Data already loaded (361 source transactions)
-6. **Next command to run:**
-   ```bash
-   uvicorn backend.app.main:app --reload --port 8000
-   ```
-7. Then verify at http://localhost:8000/docs and continue with Day 2 (Normalization)
+6. Backend API running on port 8000 (if not, run `uvicorn backend.app.main:app --reload --port 8000`)
+7. **Next task:** Day 2 — Normalization & Canonical Model
 
 ---
 
-*Last updated: 2026-08-25 - Day 1 Morning complete: PostgreSQL setup, migrations, data generation, and data loading all successful. 361 source transactions loaded. Ready for Day 1 Evening (backend API start).*
+*Last updated: 2026-08-25 - Day 1 complete: PostgreSQL setup, migrations, data generation, data loading (361 records), and backend API running on port 8000. Ready for Day 2 (Normalization).*

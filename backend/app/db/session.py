@@ -1,4 +1,5 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from collections.abc import AsyncGenerator
 from backend.app.config import get_settings
 from backend.app.db.base import Base
 from backend.app.db import models  # noqa: F401 - registers models with Base.metadata
@@ -6,7 +7,7 @@ from backend.app.db import models  # noqa: F401 - registers models with Base.met
 settings = get_settings()
 
 DATABASE_URL = (
-    f"postgresql+asyncpg://{settings.database.user}:{settings.database.password}"
+    f"postgresql+asyncpg://{settings.database.user}:{settings.database.password.get_secret_value()}"
     f"@{settings.database.host}:{settings.database.port}/{settings.database.name}"
 )
 
@@ -14,7 +15,7 @@ engine = create_async_engine(DATABASE_URL, echo=settings.app.debug if hasattr(se
 async_session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
-async def get_db() -> AsyncSession:
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with async_session_maker() as session:
         try:
             yield session

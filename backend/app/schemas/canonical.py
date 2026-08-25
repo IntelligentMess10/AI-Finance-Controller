@@ -93,6 +93,7 @@ class CanonicalTransactionCreate(BaseModel):
     amount: Decimal
     currency: str = "INR"
     counterparty: str
+    counterparty_loose: str = ""
     description: Optional[str] = None
     reference: Optional[str] = None
     direction: TransactionDirection

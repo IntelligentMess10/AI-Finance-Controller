@@ -45,11 +45,19 @@
 - [x] Ground truth: ground_truth.csv + ground_truth.parquet
 - [x] scripts/load_data.py for PostgreSQL import
 
-### Day 3 — Normalization & Canonical Model
-- [ ] CanonicalTransaction Pydantic model
-- [ ] Normalization pipeline per source (dates, amounts, counterparty, references, direction)
-- [ ] Raw data preservation for audit
-- [ ] Unit tests for normalization
+### Day 3 — Normalization & Canonical Model ✅ COMPLETE
+- [x] CanonicalTransaction Pydantic model (with `counterparty_loose` field)
+- [x] Normalization pipeline per source (dates, amounts, counterparty, references, direction)
+- [x] Raw data preservation for audit (stored in `txn_metadata`)
+- [x] Unit tests for normalization edge cases (15 tests passing)
+- [x] Counterparty normalization: aggressive (suffixes only at end) + loose (display) versions
+- [x] Reference normalization: alphanumeric + hyphen only, underscore→hyphen
+- [x] Amount parsing: fail-fast on invalid input
+- [x] Date parsing: multi-format support with fail-fast
+- [x] Direction logic: source-specific (bank DR/CR, ledger account type, processor type)
+- [x] Batch processing for scalability (500 records/batch)
+- [x] Normalization runner script (`scripts/normalize.py`)
+- [x] Normalized 361 source transactions → 361 canonical transactions
 
 ### Day 4 — Deterministic Reconciliation Engine ⚡ CORE
 - [ ] Stage 1: Exact matching (reference + amount + currency)
@@ -182,18 +190,15 @@ Variance = Bank Cash - Expected Cash
 
 ## Next Steps (Priority Order)
 
-1. **Day 2 — Normalization & Canonical Model** ⚡ NEXT
-   - [ ] CanonicalTransaction normalization pipeline per source (dates, amounts, counterparty, references, direction)
-   - [ ] Run normalization on loaded data (source_transactions → canonical_transactions)
-   - [ ] Unit tests for normalization edge cases
-
-2. **Day 3 — Deterministic Reconciliation Engine** ⚡ CORE
+1. **Day 4 — Deterministic Reconciliation Engine** ⚡ NEXT
    - [ ] Stage 1: Exact matching (reference + amount + currency)
    - [ ] Stage 2: Strong matching (amount + counterparty + date window)
    - [ ] Stage 3: Fuzzy matching (RapidFuzz weighted scoring)
    - [ ] Configurable weights/thresholds from config.yaml
    - [ ] Exception creation with types
    - [ ] Baseline evaluation vs ground truth (target: >85% match rate, <3% false match)
+
+2. **Day 5 — Cash Position Engine** ...
 
 3. **Day 4 — Cash Position Engine** ...
 
@@ -232,10 +237,10 @@ To resume in a new session:
 2. Check `config.yaml` for current settings
 3. `.env` already configured with `DB_PASSWORD=finance_pass`
 4. PostgreSQL running with `ai_finance` database, `finance_user`/`finance_pass`
-5. Data already loaded (361 source transactions)
+5. Data already loaded (361 source transactions, 361 canonical transactions)
 6. Backend API running on port 8000 (if not, run `uvicorn backend.app.main:app --reload --port 8000`)
-7. **Next task:** Day 2 — Normalization & Canonical Model
+7. **Next task:** Day 4 — Deterministic Reconciliation Engine
 
 ---
 
-*Last updated: 2026-08-25 - Day 1 complete: PostgreSQL setup, migrations, data generation, data loading (361 records), and backend API running on port 8000. Ready for Day 2 (Normalization).*
+*Last updated: 2026-08-26 - Day 3 complete: Normalization pipeline complete with 15 passing tests. 361 source transactions normalized to 361 canonical transactions with aggressive+loose counterparty normalization, reference normalization, amount/date parsing, direction logic, and batch processing. Ready for Day 4 (Reconciliation Engine).*

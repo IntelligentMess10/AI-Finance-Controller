@@ -105,6 +105,7 @@ class CanonicalTransaction(Base):
     amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="INR", nullable=False)
     counterparty: Mapped[str] = mapped_column(String(255), nullable=False)
+    counterparty_loose: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
     direction: Mapped[TransactionDirection] = mapped_column(Enum(TransactionDirection), nullable=False)

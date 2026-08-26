@@ -135,7 +135,7 @@ class Normalizer:
         return TransactionDirection.INFLOW if amount > 0 else TransactionDirection.OUTFLOW
 
     def normalize_source_transaction(self, source_txn: SourceTransaction) -> Tuple[CanonicalTransaction, Dict[str, Any]]:
-        """Normalize a single source transaction.
+        """
         
         Returns:
             Tuple of (CanonicalTransaction, normalization_warnings)
@@ -156,6 +156,40 @@ class Normalizer:
         if reference and reference != source_txn.reference.upper().strip().replace('_', '-'):
             warnings['reference_normalized'] = True
 
+        # Preserve source-specific fields in metadata
+        metadata = {
+            "raw_counterparty": source_txn.counterparty,
+            "raw_counterparty_loose": counterparty_loose,
+            "raw_reference": source_txn.reference,
+            "raw_amount": str(source_txn.amount),
+            "raw_date": str(source_txn.transaction_date),
+            "warnings": warnings,
+        }
+        
+        # Add source-specific fields
+        raw = source_txn.raw_data
+        if source_txn.source == TransactionSource.PROCESSOR:
+            if "fee" in raw:
+                metadata["processor_fee"] = str(raw["fee"])
+            if "net_amount" in raw:
+                metadata["processor_net_amount"] = str(raw["net_amount"])
+            if "gross_amount" in raw:
+                metadata["processor_gross_amount"] = str(raw["gross_amount"])
+            if "settlement_date" in raw:
+                metadata["processor_settlement_date"] = str(raw["settlement_date"])
+            if "processor_reference" in raw:
+                metadata["processor_reference"] = raw["processor_reference"]
+        elif source_txn.source == TransactionSource.BANK:
+            if "dr_cr" in raw:
+                metadata["bank_dr_cr"] = raw["dr_cr"]
+        elif source_txn.source == TransactionSource.LEDGER:
+            if "invoice_id" in raw:
+                metadata["ledger_invoice_id"] = raw["invoice_id"]
+            if "account" in raw:
+                metadata["ledger_account"] = raw["account"]
+            if "status" in raw:
+                metadata["ledger_status"] = raw["status"]
+
         canonical = CanonicalTransaction(
             source=source_txn.source,
             source_id=source_txn.source_id,
@@ -163,18 +197,11 @@ class Normalizer:
             amount=amount,
             currency=source_txn.currency or "INR",
             counterparty=counterparty_normalized,
-            counterparty_loose=counterparty_loose,  # Store less aggressive version too
+            counterparty_loose=counterparty_loose,
             description=source_txn.description,
             reference=reference,
             direction=direction,
-            txn_metadata={
-                "raw_counterparty": source_txn.counterparty,
-                "raw_counterparty_loose": counterparty_loose,
-                "raw_reference": source_txn.reference,
-                "raw_amount": str(source_txn.amount),
-                "raw_date": str(source_txn.transaction_date),
-                "warnings": warnings,
-            }
+            txn_metadata=metadata
         )
         return canonical, warnings
 
@@ -213,7 +240,7 @@ class Normalizer:
                     logger.error(f"Failed to normalize {st.source_id} ({st.source}): {e}")
                     # Continue with other records - don't fail entire batch
                     continue
-            
+                
             # Bulk insert batch
             if batch_canonical:
                 db.add_all(batch_canonical)
@@ -222,7 +249,7 @@ class Normalizer:
                 # Link back to source transactions
                 for st, canonical in zip(batch, batch_canonical):
                     st.canonical_transaction_id = canonical.id
-            
+                
             await db.commit()
             logger.info(f"Processed batch {i//self.BATCH_SIZE + 1}: {len(batch_canonical)} records")
         

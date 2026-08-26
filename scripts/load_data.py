@@ -39,6 +39,11 @@ def parse_date(val):
 
 async def load_csv_data():
     async with async_session() as db:
+        # Clear existing data
+        from sqlalchemy import text
+        await db.execute(text("TRUNCATE source_transactions, canonical_transactions, matches, exceptions, resolutions, cash_positions, forecast_entries, audit_log RESTART IDENTITY CASCADE"))
+        await db.commit()
+        
         bank_df = pl.read_csv("data/bank.csv")
         ledger_df = pl.read_csv("data/ledger.csv")
         processor_df = pl.read_csv("data/processor.csv")

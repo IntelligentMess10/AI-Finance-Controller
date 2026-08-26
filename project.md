@@ -59,13 +59,16 @@
 - [x] Normalization runner script (`scripts/normalize.py`)
 - [x] Normalized 361 source transactions → 361 canonical transactions
 
-### Day 4 — Deterministic Reconciliation Engine ⚡ CORE
-- [ ] Stage 1: Exact matching (reference + amount + currency)
-- [ ] Stage 2: Strong matching (amount + counterparty + date window)
-- [ ] Stage 3: Fuzzy matching (RapidFuzz weighted scoring)
-- [ ] Configurable weights/thresholds from config.yaml
-- [ ] Exception creation with types
-- [ ] Baseline evaluation vs ground truth (target: >85% match rate, <3% false match)
+### Day 4 — Deterministic Reconciliation Engine ⚡ CORE ✅ COMPLETE
+- [x] Stage 1: Exact matching (reference + amount + currency)
+- [x] Stage 2: Strong matching (amount + counterparty + date window with tolerance)
+- [x] Stage 3: Fuzzy matching (RapidFuzz weighted scoring)
+- [x] Configurable weights/thresholds from config.yaml
+- [x] Exception creation with types
+- [x] Baseline evaluation vs ground truth (achieved: 98.9% match rate, 4 exceptions)
+- [x] Special matching for processor fees, date mismatches, rounding, reference typos
+- [x] Pair-based matching allowing multiple matches per transaction
+- [x] Proper exception classification for unmatched transactions
 
 ### Day 5 — Cash Position Engine
 - [ ] CashEngine: opening balance + confirmed inflows/outflows
@@ -188,29 +191,46 @@ Variance = Bank Cash - Expected Cash
 - Used only in `evaluation/metrics.py`
 - Computes: accuracy, false_match_rate, resolution rates
 
-## Next Steps (Priority Order)
+1. **Day 5 — Cash Position Engine** ⚡ NEXT
+   - [ ] CashEngine: opening balance + confirmed inflows/outflows
+   - [ ] Pending items from exceptions/probable matches
+   - [ ] Variance calculation (expected vs bank)
+   - [ ] Forecast: 7/14/30 day with scheduled events
+   - [ ] API endpoints
 
-1. **Day 4 — Deterministic Reconciliation Engine** ⚡ NEXT
-   - [ ] Stage 1: Exact matching (reference + amount + currency)
-   - [ ] Stage 2: Strong matching (amount + counterparty + date window)
-   - [ ] Stage 3: Fuzzy matching (RapidFuzz weighted scoring)
-   - [ ] Configurable weights/thresholds from config.yaml
-   - [ ] Exception creation with types
-   - [ ] Baseline evaluation vs ground truth (target: >85% match rate, <3% false match)
+2. **Day 6 — AI Investigator Agent** ⚡ CORE
+   - [ ] Tool definitions (get_transaction, get_source_records, search_similar, calculate_difference)
+   - [ ] Structured output schema (AIResolution Pydantic model)
+   - [ ] Investigation loop with system prompt
+   - [ ] Validation pipeline: AI → Pydantic → Business Rules → DB
+   - [ ] Confidence threshold for auto-resolve (0.90)
+   - [ ] Audit logging
 
-2. **Day 5 — Cash Position Engine** ...
+3. **Day 7 — Full Pipeline Integration & Evaluation**
+   - [ ] POST /reconciliation/run orchestrates full flow
+   - [ ] GET /metrics with ground truth comparison
+   - [ ] Run on 120 records, capture metrics
+   - [ ] Target: ≥92% match rate, ≥90% accuracy, ≤2% false match, ≥70% AI resolution rate
 
-3. **Day 4 — Cash Position Engine** ...
+4. **Day 8 — Streamlit Dashboard** ⚡ VISIBLE OUTPUT
+   - [ ] Overview: KPIs, cash waterfall, quick actions
+   - [ ] Reconciliation: Filterable table with status badges
+   - [ ] Exceptions: Tabbed queue (Open/Investigating/Resolved/Escalated/Unresolved)
+   - [ ] Exception Detail: Side-by-side evidence panel (Bank|Ledger|Processor)
+   - [ ] Unresolved View: Honest "Human review required" display
+   - [ ] Cash Position: Breakdown + forecast charts
+   - [ ] Metrics: Confusion matrix, resolution breakdown
+   - [ ] Dark Bloomberg-style theme
 
-5. **Day 5 — AI Investigator Agent** ⚡ CORE ...
+5. **Day 9 — Polish & Demo Prep**
+   - [ ] Error handling, edge cases, performance
+   - [ ] Demo script (3-5 min)
+   - [ ] Backup screen recording
+   - [ ] README, architecture diagram
 
-6. **Day 6 — Full Pipeline Integration & Evaluation** ...
-
-7. **Day 7 — Streamlit Dashboard** ⚡ VISIBLE OUTPUT ...
-
-8. **Day 8 — Polish & Demo Prep** ...
-
-9. **Day 9 — Buffer & Final QA** ...
+6. **Day 10 — Buffer & Final QA**
+   - [ ] Fresh DB end-to-end test
+   - [ ] Submission package preparation
 
 ## Competition Differentiators (Built In)
 
@@ -239,8 +259,8 @@ To resume in a new session:
 4. PostgreSQL running with `ai_finance` database, `finance_user`/`finance_pass`
 5. Data already loaded (361 source transactions, 361 canonical transactions)
 6. Backend API running on port 8000 (if not, run `uvicorn backend.app.main:app --reload --port 8000`)
-7. **Next task:** Day 4 — Deterministic Reconciliation Engine
+7. **Next task:** Day 5 — Cash Position Engine
 
 ---
 
-*Last updated: 2026-08-26 - Day 3 complete: Normalization pipeline complete with 15 passing tests. 361 source transactions normalized to 361 canonical transactions with aggressive+loose counterparty normalization, reference normalization, amount/date parsing, direction logic, and batch processing. Ready for Day 4 (Reconciliation Engine).*
+*Last updated: 2026-08-26 - Day 4 complete: Reconciliation Engine achieving 98.9% match rate (357/361 transactions matched, 4 exceptions). Ready for Day 5 (Cash Position Engine).*

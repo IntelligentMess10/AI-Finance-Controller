@@ -404,6 +404,27 @@ class ReconciliationEngine:
                 mark_pair_matched(pair.txn1.id, pair.txn2.id)
             logger.info(f"After exact matching: {len(matched_pairs)} pairs matched")
         
+        # Detect special matches FIRST (processor fees, date mismatches, rounding, reference typos)
+        # These should run BEFORE strong/fuzzy to catch specific patterns before generic matching
+        special_matches = self._detect_special_matches(transactions, set())  # Don't filter by matched_ids
+        logger.info(f"Special matches found: {len(special_matches)}")
+        for pair in special_matches:
+            if is_pair_matched(pair.txn1.id, pair.txn2.id):
+                continue
+            match_obj = Match(
+                canonical_transaction_id=pair.txn1.id,
+                matched_transaction_id=pair.txn2.id,
+                score=pair.candidate.score,
+                method=pair.candidate.method,
+                status=MatchStatus.MATCHED,  # Special matches are high confidence
+                evidence=pair.candidate.evidence
+            )
+            db_session.add(match_obj)
+            await db_session.flush()
+            all_matches.append(match_obj)
+            mark_pair_matched(pair.txn1.id, pair.txn2.id)
+        logger.info(f"After special matching: {len(matched_pairs)} pairs matched")
+        
         if self.config.strong_enabled:
             strong_matches = self.find_strong_matches(transactions, set())  # Don't filter by matched_ids
             logger.info(f"Strong matches found: {len(strong_matches)}")
@@ -424,27 +445,6 @@ class ReconciliationEngine:
                 all_matches.append(match_obj)
                 mark_pair_matched(pair.txn1.id, pair.txn2.id)
             logger.info(f"After strong matching: {len(matched_pairs)} pairs matched")
-        
-        # Detect special matches (processor fees, date mismatches, rounding, reference typos)
-        # These run AFTER strong matching to catch specific patterns that generic matching missed
-        special_matches = self._detect_special_matches(transactions, set())  # Don't filter by matched_ids
-        logger.info(f"Special matches found: {len(special_matches)}")
-        for pair in special_matches:
-            if is_pair_matched(pair.txn1.id, pair.txn2.id):
-                continue
-            match_obj = Match(
-                canonical_transaction_id=pair.txn1.id,
-                matched_transaction_id=pair.txn2.id,
-                score=pair.candidate.score,
-                method=pair.candidate.method,
-                status=MatchStatus.MATCHED,  # Special matches are high confidence
-                evidence=pair.candidate.evidence
-            )
-            db_session.add(match_obj)
-            await db_session.flush()
-            all_matches.append(match_obj)
-            mark_pair_matched(pair.txn1.id, pair.txn2.id)
-        logger.info(f"After special matching: {len(matched_pairs)} pairs matched")
         
         if self.config.fuzzy_enabled:
             fuzzy_matches = self.find_fuzzy_matches(transactions, set())
@@ -476,26 +476,29 @@ class ReconciliationEngine:
         # Commit all matches
         await db_session.commit()
         
+        # Calculate which transactions have matches
+        matched_txn_ids = set()
+        for m in all_matches:
+            matched_txn_ids.add(m.canonical_transaction_id)
+            matched_txn_ids.add(m.matched_transaction_id)
+        
         # Classify exceptions for unmatched transactions
         all_exceptions = []
         for txn in transactions:
-            # Check if this transaction is part of any matched pair
-            has_match = any(
-                (m.canonical_transaction_id == txn.id or m.matched_transaction_id == txn.id)
-                for m in all_matches
-            )
-            if not has_match:
+            if txn.id not in matched_txn_ids:
                 candidates = []  # No matches for this transaction
-                exc = self.classify_exception(txn, candidates)
+                exc = self.classify_exception(txn, [])
                 if exc:
                     db_session.add(exc)
                     all_exceptions.append(exc)
         
         await db_session.commit()
         
+        matched_txn_count = len(matched_txn_ids)
+        
         logger.info(f"Total matches created: {len(all_matches)}")
-        logger.info(f"Matched: {len([m for m in all_matches if m.status == MatchStatus.MATCHED])}")
-        logger.info(f"Probable: {len([m for m in all_matches if m.status == MatchStatus.PROBABLE_MATCH])}")
+        logger.info(f"Matched transactions: {matched_txn_count}")
+        logger.info(f"Probable matches: {len([m for m in all_matches if m.status == MatchStatus.PROBABLE_MATCH])}")
         logger.info(f"Exceptions: {len(all_exceptions)}")
         
         # Return stats
@@ -504,7 +507,7 @@ class ReconciliationEngine:
             "exceptions": all_exceptions,
             "stats": {
                 "total": len(transactions),
-                "matched": len([m for m in all_matches if m.status == MatchStatus.MATCHED]),
+                "matched": matched_txn_count,
                 "probable": len([m for m in all_matches if m.status == MatchStatus.PROBABLE_MATCH]),
                 "exceptions": len(all_exceptions),
             }

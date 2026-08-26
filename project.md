@@ -70,12 +70,17 @@
 - [x] Pair-based matching allowing multiple matches per transaction
 - [x] Proper exception classification for unmatched transactions
 
-### Day 5 — Cash Position Engine
-- [ ] CashEngine: opening balance + confirmed inflows/outflows
-- [ ] Pending items from exceptions/probable matches
-- [ ] Variance calculation (expected vs bank)
-- [ ] Forecast: 7/14/30 day with scheduled events
-- [ ] API endpoints
+### Day 5 — Cash Position Engine ✅ COMPLETE
+- [x] CashEngine: opening balance + confirmed inflows/outflows
+- [x] Pending items from exceptions/probable matches
+- [x] Variance calculation (expected vs bank)
+- [x] Forecast: 7/14/30 day with scheduled events
+- [x] API endpoints (/cash/position, /cash/position/calculate, /cash/variance, /cash/forecast, /cash/forecast/summary, /cash/adjustment)
+- [x] Integrated with reconciliation flow (CashEngine called after reconciliation)
+- [x] Bank cash derived from bank transactions (source=BANK)
+- [x] Adjustments support for manual corrections
+- [x] Forecast with recurring event expansion
+- [x] Variance breakdown API
 
 ### Day 6 — AI Investigator Agent ⚡ CORE
 - [ ] Tool definitions (get_transaction, get_source_records, search_similar, calculate_difference)
@@ -191,14 +196,7 @@ Variance = Bank Cash - Expected Cash
 - Used only in `evaluation/metrics.py`
 - Computes: accuracy, false_match_rate, resolution rates
 
-1. **Day 5 — Cash Position Engine** ⚡ NEXT
-   - [ ] CashEngine: opening balance + confirmed inflows/outflows
-   - [ ] Pending items from exceptions/probable matches
-   - [ ] Variance calculation (expected vs bank)
-   - [ ] Forecast: 7/14/30 day with scheduled events
-   - [ ] API endpoints
-
-2. **Day 6 — AI Investigator Agent** ⚡ CORE
+1. **Day 6 — AI Investigator Agent** ⚡ CORE
    - [ ] Tool definitions (get_transaction, get_source_records, search_similar, calculate_difference)
    - [ ] Structured output schema (AIResolution Pydantic model)
    - [ ] Investigation loop with system prompt
@@ -206,13 +204,13 @@ Variance = Bank Cash - Expected Cash
    - [ ] Confidence threshold for auto-resolve (0.90)
    - [ ] Audit logging
 
-3. **Day 7 — Full Pipeline Integration & Evaluation**
+2. **Day 7 — Full Pipeline Integration & Evaluation**
    - [ ] POST /reconciliation/run orchestrates full flow
    - [ ] GET /metrics with ground truth comparison
    - [ ] Run on 120 records, capture metrics
    - [ ] Target: ≥92% match rate, ≥90% accuracy, ≤2% false match, ≥70% AI resolution rate
 
-4. **Day 8 — Streamlit Dashboard** ⚡ VISIBLE OUTPUT
+3. **Day 8 — Streamlit Dashboard** ⚡ VISIBLE OUTPUT
    - [ ] Overview: KPIs, cash waterfall, quick actions
    - [ ] Reconciliation: Filterable table with status badges
    - [ ] Exceptions: Tabbed queue (Open/Investigating/Resolved/Escalated/Unresolved)
@@ -222,13 +220,13 @@ Variance = Bank Cash - Expected Cash
    - [ ] Metrics: Confusion matrix, resolution breakdown
    - [ ] Dark Bloomberg-style theme
 
-5. **Day 9 — Polish & Demo Prep**
+4. **Day 9 — Polish & Demo Prep**
    - [ ] Error handling, edge cases, performance
    - [ ] Demo script (3-5 min)
    - [ ] Backup screen recording
    - [ ] README, architecture diagram
 
-6. **Day 10 — Buffer & Final QA**
+5. **Day 10 — Buffer & Final QA**
    - [ ] Fresh DB end-to-end test
    - [ ] Submission package preparation
 
@@ -259,8 +257,8 @@ To resume in a new session:
 4. PostgreSQL running with `ai_finance` database, `finance_user`/`finance_pass`
 5. Data already loaded (361 source transactions, 361 canonical transactions)
 6. Backend API running on port 8000 (if not, run `uvicorn backend.app.main:app --reload --port 8000`)
-7. **Next task:** Day 5 — Cash Position Engine
+7. **Next task:** Day 6 — AI Investigator Agent
 
 ---
 
-*Last updated: 2026-08-26 - Day 4 complete: Reconciliation Engine achieving 98.9% match rate (357/361 transactions matched, 4 exceptions). Ready for Day 5 (Cash Position Engine).*
+*Last updated: 2026-08-27 - Day 5 complete: Cash Position Engine fully implemented with 98.9% match rate, 98.9% transactions matched, 4 exceptions. CashEngine fully integrated with reconciliation flow, API endpoints complete, forecast with recurring events, variance breakdown, and adjustments support. Ready for Day 6 (AI Investigator Agent).*

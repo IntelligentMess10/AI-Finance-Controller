@@ -133,6 +133,9 @@ async def investigate_exception(exc_id: int, db: AsyncSession = Depends(get_db))
     return {"status": "investigation_started", "exception_id": exc_id}
 
 
+from backend.app.services.cash_engine import CashEngine
+from backend.app.config import get_settings
+
 router_cash = APIRouter(prefix="/cash", tags=["cash"])
 
 
@@ -150,6 +153,47 @@ async def get_cash_position(date: date = None, db: AsyncSession = Depends(get_db
     return position
 
 
+@router_cash.post("/position/calculate", response_model=CashPositionRead)
+async def calculate_cash_position(db: AsyncSession = Depends(get_db)):
+    """Calculate and store a fresh cash position."""
+    settings = get_settings()
+    cash_engine = CashEngine(settings.app.opening_cash)
+    position = await cash_engine.calculate_position(db)
+    db.add(position)
+    await db.commit()
+    await db.refresh(position)
+    return position
+
+
+@router_cash.get("/variance", response_model=dict[str, any])
+async def get_cash_variance(db: AsyncSession = Depends(get_db)):
+    """Get detailed variance breakdown for the latest cash position."""
+    result = await db.execute(
+        select(CashPosition).order_by(CashPosition.date.desc()).limit(1)
+    )
+    position = result.scalar_one_or_none()
+    if not position:
+        raise HTTPException(404, "Cash position not found")
+    
+    # Return variance breakdown
+    return {
+        "total_variance": float(position.variance),
+        "expected_cash": float(position.expected_cash),
+        "bank_cash": float(position.bank_cash),
+        "opening_balance": float(position.opening_balance),
+        "confirmed_inflows": float(position.confirmed_inflows),
+        "confirmed_outflows": float(position.confirmed_outflows),
+        "pending_inflows": float(position.pending_inflows),
+        "pending_outflows": float(position.pending_outflows),
+        "adjustments": float(position.adjustments),
+        "variance_breakdown": {
+            "expected_vs_bank": float(position.variance),
+            "pending_impact": float(position.pending_inflows - position.pending_outflows),
+            "adjustments_impact": float(position.adjustments),
+        }
+    }
+
+
 @router_cash.get("/forecast", response_model=List[ForecastEntryRead])
 async def get_forecast(days: int = 30, db: AsyncSession = Depends(get_db)):
     from datetime import date, timedelta
@@ -160,6 +204,76 @@ async def get_forecast(days: int = 30, db: AsyncSession = Depends(get_db)):
         .order_by(ForecastEntry.forecast_date)
     )
     return result.scalars().all()
+
+
+@router_cash.get("/forecast/summary")
+async def get_forecast_summary(days: int = 30, db: AsyncSession = Depends(get_db)):
+    """Get forecast summary grouped by horizon."""
+    from backend.app.services.cash_engine import CashEngine
+    from backend.app.config import get_settings
+    
+    settings = get_settings()
+    cash_engine = CashEngine(settings.app.opening_cash)
+    entries = await db.execute(
+        select(ForecastEntry).where(ForecastEntry.horizon_days <= days).order_by(ForecastEntry.forecast_date)
+    )
+    entries = entries.scalars().all()
+    
+    horizons = [7, 14, 30]
+    summary = {}
+    for horizon in horizons:
+        if horizon <= days:
+            inflows = Decimal("0")
+            outflows = Decimal("0")
+            for entry in entries:
+                if entry.horizon_days <= horizon:
+                    if entry.amount > 0:
+                        inflows += entry.amount
+                    else:
+                        outflows += abs(entry.amount)
+            summary[horizon] = {
+                "inflows": float(inflows),
+                "outflows": float(outflows),
+                "net": float(inflows - outflows),
+            }
+    return summary
+
+
+@router_cash.post("/adjustment")
+async def add_cash_adjustment(
+    amount: Decimal,
+    note: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Add a manual cash adjustment (e.g., bank fees, interest, corrections)."""
+    result = await db.execute(
+        select(CashPosition).order_by(CashPosition.date.desc()).limit(1)
+    )
+    position = result.scalar_one_or_none()
+    if not position:
+        raise HTTPException(404, "No cash position exists to adjust")
+    
+    # Create a new position with the adjustment
+    new_adjustments = position.adjustments + amount
+    new_expected = position.expected_cash + amount
+    new_variance = position.bank_cash - (position.opening_balance + position.confirmed_inflows - position.confirmed_outflows + new_adjustments)
+    
+    new_position = CashPosition(
+        date=date.today(),
+        opening_balance=position.opening_balance,
+        confirmed_inflows=position.confirmed_inflows,
+        confirmed_outflows=position.confirmed_outflows,
+        pending_inflows=position.pending_inflows,
+        pending_outflows=position.pending_outflows,
+        adjustments=new_adjustments,
+        expected_cash=new_expected,
+        bank_cash=position.bank_cash,
+        variance=new_variance,
+    )
+    db.add(new_position)
+    await db.commit()
+    await db.refresh(new_position)
+    return new_position
 
 
 router_metrics = APIRouter(prefix="/metrics", tags=["metrics"])

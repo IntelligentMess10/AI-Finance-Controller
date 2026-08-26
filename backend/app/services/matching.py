@@ -6,6 +6,7 @@ from rapidfuzz import fuzz, process
 from backend.app.config import MatchingConfig
 from backend.app.db.models import CanonicalTransaction, Match, MatchStatus, Exception, ExceptionType, ExceptionStatus
 from backend.app.services.normalization import Normalizer
+from backend.app.services.cash_engine import CashEngine
 
 
 @dataclass
@@ -493,6 +494,17 @@ class ReconciliationEngine:
                     all_exceptions.append(exc)
         
         await db_session.commit()
+        
+        # Calculate cash position after reconciliation
+        from backend.app.config import get_settings
+        settings = get_settings()
+        cash_engine = CashEngine(settings.app.opening_cash)
+        cash_position = await cash_engine.calculate_position(db_session)
+        logger.info(f"Cash position calculated: expected={cash_position.expected_cash}, bank={cash_position.bank_cash}, variance={cash_position.variance}")
+        
+        # Generate forecast
+        forecast_entries = await cash_engine.generate_forecast(db_session)
+        logger.info(f"Forecast generated: {len(forecast_entries)} entries")
         
         matched_txn_count = len(matched_txn_ids)
         

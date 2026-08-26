@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import List
+from typing import List, Dict, Any
 from datetime import date
 from decimal import Decimal
 
@@ -165,7 +165,7 @@ async def calculate_cash_position(db: AsyncSession = Depends(get_db)):
     return position
 
 
-@router_cash.get("/variance", response_model=dict[str, any])
+@router_cash.get("/variance", response_model=Dict[str, Any])
 async def get_cash_variance(db: AsyncSession = Depends(get_db)):
     """Get detailed variance breakdown for the latest cash position."""
     result = await db.execute(

@@ -3,10 +3,11 @@ from decimal import Decimal
 from datetime import date
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from backend.app.db.models import CanonicalTransaction, Exception, Resolution, ResolutionStatus, ExceptionType, AuditLog, AuditAction
+from backend.app.db.models import CanonicalTransaction, Exception, Resolution, ResolutionStatus, ExceptionType, AuditLog, AuditAction, TransactionSource
 from backend.app.schemas.canonical import AIResolution
 from backend.app.services.llm_providers import LLMProvider, get_provider, LLMMessage
 from backend.app.config import get_settings, AIConfig
+from pydantic import ValidationError
 
 
 INVESTIGATOR_SYSTEM_PROMPT = """You are an AI Finance Investigator. Your job is to investigate financial reconciliation exceptions by examining evidence from multiple sources.
@@ -153,7 +154,30 @@ Determine the root cause and classify the exception.
         import json
         ai_output = json.loads(final_response.content)
         ai_resolution = AIResolution(**ai_output)
-
+        
+        # Log AI classification proposed
+        await self._log_audit(db, "AI_CLASSIFICATION_PROPOSED", exception.id, 
+            f"AI proposed: {ai_resolution.classification.value} with confidence {ai_resolution.confidence:.2f}")
+        
+        # Validate AI resolution
+        is_valid, error_msg = await self._validate_ai_resolution(db, ai_resolution, exception, txn)
+        if not is_valid:
+            # Log validation failure
+            await self._log_audit(db, "AI_VALIDATION_FAILED", exception.id, f"Validation failed: {error_msg}")
+            
+            # If validation fails, escalate with low confidence
+            ai_resolution.status = ResolutionStatus.ESCALATED
+            ai_resolution.confidence = 0.1
+            ai_resolution.explanation = f"Validation failed: {ai_resolution.explanation} (Validation error: {error_msg})"
+            ai_resolution.status = ResolutionStatus.ESCALATED
+            ai_resolution.confidence = 0.1
+            ai_resolution.evidence = [f"Validation failed: {error_msg}"]
+            ai_resolution.recommended_action = "Manual review required"
+        else:
+            # Log validation passed
+            await self._log_audit(db, "AI_VALIDATION_PASSED", exception.id, 
+                f"Validation passed for {ai_resolution.classification.value} with confidence {ai_resolution.confidence:.2f}")
+        
         resolution = Resolution(
             exception_id=exception.id,
             status=ai_resolution.status,
@@ -166,6 +190,15 @@ Determine the root cause and classify the exception.
         )
         
         await self._log_audit(db, "AI_INVESTIGATION_STARTED", exception.id, f"AI investigation for {exception.type}")
+        
+        # Save resolution to DB
+        db.add(resolution)
+        await db.commit()
+        await db.refresh(resolution)
+        
+        # Log resolution saved
+        await self._log_audit(db, "AI_RESOLUTION_SAVED", exception.id, 
+            f"Resolution saved with status {resolution.status.value}, confidence {resolution.confidence:.2f}")
         
         return resolution
 
@@ -206,7 +239,206 @@ Determine the root cause and classify the exception.
             return {"name": name, "result": {"amount_diff": str(diff), "details": f"{a.get('amount')} - {b.get('amount')} = {diff}"}}
         
         return {"name": name, "result": None, "error": "Unknown tool"}
-
+    
+    async def _validate_ai_resolution(
+        self, 
+        db: AsyncSession, 
+        ai_resolution: AIResolution, 
+        exception: Exception,
+        txn: CanonicalTransaction
+    ) -> tuple[bool, str]:
+        """
+        Validate AI resolution against business rules and actual data.
+        Returns (is_valid, error_message).
+        """
+        # 1. Pydantic validation already done via AIResolution(**ai_output)
+        
+        # 2. Confidence threshold check
+        if ai_resolution.confidence < self.config.confidence_auto_resolve:
+            return False, f"Confidence {ai_resolution.confidence:.2f} below auto-resolve threshold {self.config.confidence_auto_resolve}"
+        
+        # 2. Business rule: classification must match exception type or be valid
+        valid_classifications = [
+            ExceptionType.AMOUNT_MISMATCH,
+            ExceptionType.DATE_MISMATCH,
+            ExceptionType.MISSING_RECORD,
+            ExceptionType.DUPLICATE,
+            ExceptionType.CURRENCY_MISMATCH,
+            ExceptionType.UNKNOWN_TRANSACTION,
+            ExceptionType.PROCESSOR_FEE,
+            ExceptionType.AMBIGUOUS_MATCH,
+            ExceptionType.REFERENCE_MISMATCH,
+        ]
+        if ai_resolution.classification not in valid_classifications:
+            return False, f"Invalid classification: {ai_resolution.classification}"
+        
+        # 3. Business rule: status must be valid
+        if ai_resolution.status not in [ResolutionStatus.RESOLVED, ResolutionStatus.ESCALATED, ResolutionStatus.UNRESOLVED]:
+            return False, f"Invalid status: {ai_resolution.status}"
+        
+        # 4. Business rule: evidence must be provided for resolved/escalated
+        if ai_resolution.status in [ResolutionStatus.RESOLVED, ResolutionStatus.ESCALATED] and not ai_resolution.evidence:
+            return False, "Evidence required for resolved/escalated status"
+        
+        # 5. Business rule: explanation must not be empty
+        if not ai_resolution.explanation or len(ai_resolution.explanation.strip()) < 10:
+            return False, "Explanation must be at least 10 characters"
+        
+        # 6. Business rule verification: verify evidence against actual data
+        # If classification is processor_fee, verify processor record exists
+        if ai_resolution.classification == ExceptionType.PROCESSOR_FEE:
+            if not await self._verify_processor_fee(db, exception):
+                return False, "Processor fee classification not supported by data"
+        
+        # 6b. Date mismatch verification
+        if ai_resolution.classification == ExceptionType.DATE_MISMATCH:
+            if not await self._verify_date_mismatch(db, exception):
+                return False, "Date mismatch classification not supported by data"
+        
+        # 6c. Amount mismatch verification
+        if ai_resolution.classification == ExceptionType.AMOUNT_MISMATCH:
+            if not await self._verify_amount_mismatch(db, exception):
+                return False, "Amount mismatch classification not supported by data"
+        
+        # 6c. Processor fee verification
+        if ai_resolution.classification == ExceptionType.PROCESSOR_FEE:
+            if not await self._verify_processor_fee(db, exception):
+                return False, "Processor fee classification not supported by data"
+        
+        # 6d. Duplicate verification
+        if ai_resolution.classification == ExceptionType.DUPLICATE:
+            if not await self._verify_duplicate(db, exception):
+                return False, "Duplicate classification not supported by data"
+        
+        # 7. Confidence must be reasonable for the classification
+        min_confidence = {
+            ExceptionType.PROCESSOR_FEE: 0.85,
+            ExceptionType.DATE_MISMATCH: 0.80,
+            ExceptionType.AMOUNT_MISMATCH: 0.80,
+            ExceptionType.ROUNDING_DIFFERENCE: 0.90,
+            ExceptionType.REFERENCE_MISMATCH: 0.75,
+            ExceptionType.DUPLICATE: 0.85,
+            ExceptionType.MISSING_RECORD: 0.70,
+            ExceptionType.AMBIGUOUS_MATCH: 0.50,
+            ExceptionType.UNKNOWN_TRANSACTION: 0.50,
+            ExceptionType.REFERENCE_MISMATCH: 0.75,
+            ExceptionType.CURRENCY_MISMATCH: 0.80,
+        }
+        min_conf = min_confidence.get(ai_resolution.classification, 0.50)
+        if ai_resolution.confidence < min_conf:
+            return False, f"Confidence {ai_resolution.confidence:.2f} below minimum {min_conf} for {ai_resolution.classification}"
+        
+        # 8. Evidence must be specific and cite actual data
+        for evidence in ai_resolution.evidence:
+            if len(evidence.strip()) < 5:
+                return False, "Evidence items must be specific and substantive"
+        
+        return True, ""
+    
+    async def _verify_processor_fee(self, db: AsyncSession, exception: Exception) -> bool:
+        """Verify that a processor fee explanation is supported by actual data."""
+        txn_result = await db.execute(
+            select(CanonicalTransaction).where(CanonicalTransaction.id == exception.transaction_id)
+        )
+        txn = txn_result.scalar_one_or_none()
+        if not txn:
+            return False
+        
+        # Search for processor record that matches the ledger/bank pair
+        # Look for processor with same counterparty, similar date, and amount close to ledger amount
+        ledger_amount = txn.amount
+        
+        from backend.app.db.models import TransactionSource
+        for txn in transactions:
+            if txn.source != TransactionSource.PROCESSOR:
+                continue
+            if txn.counterparty != ledger_txn.counterparty:
+                continue
+            # Check if processor amount matches ledger amount (gross amount)
+            if abs(txn.amount - ledger_txn.amount) <= Decimal("1.00"):
+                # Found matching processor record, extract fee from metadata
+                fee_str = txn.txn_metadata.get("processor_fee")
+                if fee_str is not None:
+                    try:
+                        return Decimal(fee_str)
+                    except:
+                        pass
+        return None
+    
+    async def _verify_date_mismatch(self, db: AsyncSession, exception: Exception) -> bool:
+        """Verify that a date mismatch explanation is supported by data."""
+        txn_result = await db.execute(
+            select(CanonicalTransaction).where(CanonicalTransaction.id == exception.transaction_id)
+        )
+        txn = txn_result.scalar_one_or_none()
+        if not txn:
+            return False
+        
+        # Check if there are matching transactions with same amount and counterparty but different dates
+        from backend.app.db.models import TransactionSource
+        result = await db.execute(
+            select(CanonicalTransaction).where(
+                CanonicalTransaction.counterparty == txn.counterparty,
+                CanonicalTransaction.amount == txn.amount,
+                CanonicalTransaction.source != txn.source,
+                CanonicalTransaction.date != txn.date
+            )
+        )
+        other_txns = result.scalars().all()
+        return len(other_txns) > 0
+    
+    async def _verify_amount_mismatch(self, db: AsyncSession, exception: Exception) -> bool:
+        """Verify that an amount mismatch explanation is supported by data."""
+        txn_result = await db.execute(
+            select(CanonicalTransaction).where(CanonicalTransaction.id == exception.transaction_id)
+        )
+        txn = txn_result.scalar_one_or_none()
+        if not txn:
+            return False
+        
+        # Check if there are matching transactions with same counterparty/date but different amounts
+        from backend.app.db.models import TransactionSource
+        result = await db.execute(
+            select(CanonicalTransaction).where(
+                CanonicalTransaction.counterparty == txn.counterparty,
+                CanonicalTransaction.date == txn.date,
+                CanonicalTransaction.source != txn.source
+            )
+        )
+        other_txns = result.scalars().all()
+        
+        if not other_txns:
+            return False
+        
+        # Check if any other source has different amount
+        for other in other_txns:
+            if other.amount != txn.amount:
+                return True
+        return False
+    
+    async def _verify_duplicate(self, db: AsyncSession, exception: Exception) -> bool:
+        """Verify that a duplicate explanation is supported by data."""
+        txn_result = await db.execute(
+            select(CanonicalTransaction).where(CanonicalTransaction.id == exception.transaction_id)
+        )
+        txn = txn_result.scalar_one_or_none()
+        if not txn:
+            return False
+        
+        # Check for duplicate transactions (same source, counterparty, amount, date)
+        from backend.app.db.models import TransactionSource
+        result = await db.execute(
+            select(CanonicalTransaction).where(
+                CanonicalTransaction.source == txn.source,
+                CanonicalTransaction.counterparty == txn.counterparty,
+                CanonicalTransaction.amount == txn.amount,
+                CanonicalTransaction.date == txn.date,
+                CanonicalTransaction.id != txn.id
+            )
+        )
+        duplicates = result.scalars().all()
+        return len(duplicates) > 0
+    
     async def _log_audit(self, db: AsyncSession, action: AuditAction, entity_id: int, reason: str):
         log = AuditLog(actor="ai_investigator", entity="exception", entity_id=entity_id, action=action, reason=reason)
         db.add(log)

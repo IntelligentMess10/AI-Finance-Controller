@@ -6,7 +6,7 @@ from datetime import date
 from decimal import Decimal
 
 from backend.app.db.session import get_db
-from backend.app.db.models import SourceTransaction, CanonicalTransaction, Match, Exception, Resolution, CashPosition, ForecastEntry, AuditLog
+from backend.app.db.models import SourceTransaction, CanonicalTransaction, Match, Exception, Resolution, CashPosition, ForecastEntry, AuditLog, ResolutionStatus
 from backend.app.schemas.canonical import (
     SourceTransactionCreate, SourceTransactionRead,
     CanonicalTransactionCreate, CanonicalTransactionRead,
@@ -105,6 +105,10 @@ async def get_matches(skip: int = 0, limit: int = 100, db: AsyncSession = Depend
     return result.scalars().all()
 
 
+from backend.app.services.ai_investigator import AIInvestigator
+from backend.app.services.cash_engine import CashEngine
+from backend.app.config import get_settings
+
 router_exceptions = APIRouter(prefix="/exceptions", tags=["exceptions"])
 
 
@@ -127,10 +131,52 @@ async def get_exception(exc_id: int, db: AsyncSession = Depends(get_db)):
     return exc
 
 
-@router_exceptions.post("/{exc_id}/investigate")
+@router_exceptions.post("/{exc_id}/investigate", response_model=dict)
 async def investigate_exception(exc_id: int, db: AsyncSession = Depends(get_db)):
-    # AI investigation will be implemented
-    return {"status": "investigation_started", "exception_id": exc_id}
+    """Investigate an exception using AI investigator."""
+    settings = get_settings()
+    ai_investigator = AIInvestigator(settings.ai)
+    
+    try:
+        # Get the exception
+        result = await db.execute(select(Exception).where(Exception.id == exc_id))
+        exc = result.scalar_one_or_none()
+        if not exc:
+            raise HTTPException(404, "Exception not found")
+        
+        # Run AI investigation
+        resolution = await ai_investigator.investigate(db, exc)
+        
+        # Validate confidence threshold
+        if resolution.confidence < settings.ai.confidence_auto_resolve:
+            resolution.status = ResolutionStatus.ESCALATED
+            resolution.explanation += f" [Auto-escalated: confidence {resolution.confidence:.2f} below threshold {settings.ai.confidence_auto_resolve}]"
+        
+        # Mark as validated and save
+        resolution.validated = True
+        db.add(resolution)
+        await db.commit()
+        await db.refresh(resolution)
+        
+        # Update exception status
+        exc.status = resolution.status
+        await db.commit()
+        
+        return {
+            "status": "completed",
+            "exception_id": exc_id,
+            "resolution_id": resolution.id,
+            "status": resolution.status.value,
+            "classification": resolution.classification.value,
+            "confidence": resolution.confidence,
+            "explanation": resolution.explanation,
+            "evidence": resolution.evidence,
+            "recommended_action": resolution.recommended_action,
+        }
+    except Exception as e:
+        # Auto-escalate on any error
+        await ai_investigator.close()
+        raise HTTPException(500, f"Investigation failed: {str(e)}")
 
 
 from backend.app.services.cash_engine import CashEngine

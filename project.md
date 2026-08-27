@@ -83,12 +83,16 @@
 - [x] Variance breakdown API
 
 ### Day 6 — AI Investigator Agent ⚡ CORE
-- [ ] Tool definitions (get_transaction, get_source_records, search_similar, calculate_difference)
-- [ ] Structured output schema (AIResolution Pydantic model)
-- [ ] Investigation loop with system prompt
-- [ ] Validation pipeline: AI → Pydantic → Business Rules → DB
-- [ ] Confidence threshold for auto-resolve (0.90)
-- [ ] Audit logging
+- [x] Tool definitions (get_transaction, get_source_records, search_similar, calculate_difference)
+- [x] Structured output schema (AIResolution Pydantic model)
+- [x] Investigation loop with system prompt
+- [x] API endpoint POST /exceptions/{exc_id}/investigate implemented
+- [x] Validation pipeline: AI → Pydantic → Business Rules → DB
+- [x] Confidence threshold for auto-resolve (0.90) with auto-escalation
+- [x] Audit logging (AI_CLASSIFICATION_PROPOSED, AI_VALIDATION_PASSED, AI_VALIDATION_FAILED, AI_RESOLUTION_SAVED)
+- [x] Auto-escalation on validation failure
+- [x] Business rule verification (processor_fee, date_mismatch, amount_mismatch, duplicate)
+- [x] Minimum confidence per classification type
 
 ### Day 7 — Full Pipeline Integration & Evaluation
 - [ ] POST /reconciliation/run orchestrates full flow
@@ -256,9 +260,9 @@ To resume in a new session:
 3. `.env` already configured with `DB_PASSWORD=finance_pass`
 4. PostgreSQL running with `ai_finance` database, `finance_user`/`finance_pass`
 5. Data already loaded (361 source transactions, 361 canonical transactions)
-6. Backend API running on port 8000 (if not, run `uvicorn backend.app.main:app --reload --port 8000`)
-7. **Next task:** Day 6 — AI Investigator Agent
+6. Backend API running on port 8000 (if not, run `uvicorn backend.app.main:app --host 0.0.0.0 --port 8000`)
+7. **Next task:** Day 7 — Full Pipeline Integration & Evaluation
 
 ---
 
-*Last updated: 2026-08-27 - Day 5 complete: Cash Position Engine fully implemented with 98.9% match rate, 98.9% transactions matched, 4 exceptions. CashEngine fully integrated with reconciliation flow, API endpoints complete, forecast with recurring events, variance breakdown, and adjustments support. Ready for Day 6 (AI Investigator Agent).*
+*Last updated: 2026-08-27 - Day 6 complete: AI Investigator Agent fully implemented with validation pipeline (AI → Pydantic → Business Rules → DB), confidence threshold enforcement (0.90), auto-escalation on validation failure, business rule verification (processor_fee, date_mismatch, amount_mismatch, duplicate), minimum confidence per classification, and comprehensive audit logging (AI_CLASSIFICATION_PROPOSED, AI_VALIDATION_PASSED, AI_VALIDATION_FAILED, AI_RESOLUTION_SAVED). All 29 tests passing. Ready for Day 7 (Full Pipeline Integration & Evaluation).*

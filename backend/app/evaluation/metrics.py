@@ -17,7 +17,7 @@ class EvaluationEngine:
     async def compute_all(self, db: AsyncSession) -> MetricsResponse:
         # 1. Get all canonical transactions
         total_result = await db.execute(select(CanonicalTransaction))
-        total_records = len((await total_result.scalars().all()))
+        total_records = len(total_result.scalars().all())
 
         # 2. Get all matches
         match_result = await db.execute(select(Match))

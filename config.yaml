@@ -30,16 +30,16 @@ matching:
 ai:
   provider: "${AI_PROVIDER}"
   ollama:
-    base_url: "http://localhost:11434"
-    model: "llama3.1:8b"
+    base_url: "${OLLAMA_BASE_URL}"
+    model: "${OLLAMA_MODEL}"
     timeout: 30
   groq:
     api_key: "${GROQ_API_KEY}"
-    model: "openai/gpt-oss-20b"
+    model: "${GROQ_MODEL}"
   openai_compatible:
     base_url: "${OPENAI_BASE_URL}"
     api_key: "${OPENAI_API_KEY}"
-    model: "gpt-4o-mini"
+    model: "${OPENAI_MODEL}"
   confidence_auto_resolve: 0.90
   max_tool_calls: 3
 

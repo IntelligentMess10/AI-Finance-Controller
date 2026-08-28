@@ -1,12 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from typing import List, Dict, Any
 from datetime import date
 from decimal import Decimal
+import time
 
 from backend.app.db.session import get_db
-from backend.app.db.models import SourceTransaction, CanonicalTransaction, Match, Exception, Resolution, CashPosition, ForecastEntry, AuditLog, ResolutionStatus
+from backend.app.db.models import (
+    SourceTransaction, CanonicalTransaction, Match, Exception, Resolution, 
+    CashPosition, ForecastEntry, AuditLog, ResolutionStatus, MatchStatus,
+    ExceptionStatus, ExceptionType, TransactionSource
+)
 from backend.app.schemas.canonical import (
     SourceTransactionCreate, SourceTransactionRead,
     CanonicalTransactionCreate, CanonicalTransactionRead,
@@ -16,9 +21,21 @@ from backend.app.schemas.canonical import (
     CashPositionCreate, CashPositionRead,
     ForecastEntryCreate, ForecastEntryRead,
     AuditLogCreate, AuditLogRead,
-    ReconciliationRunRequest, ReconciliationRunResponse,
-    MetricsResponse,
+    ReconciliationRunRequest, ReconciliationRunResponse, ReconciliationStats,
+    PaginatedMatchResponse, MetricsResponse,
 )
+
+from backend.app.db.session import get_db
+from backend.app.db.models import (
+    SourceTransaction, CanonicalTransaction, Match, Exception, Resolution, 
+    CashPosition, ForecastEntry, AuditLog, ResolutionStatus, MatchStatus,
+    ExceptionStatus, ExceptionType, TransactionSource
+)
+from backend.app.services import ai_investigator
+from backend.app.services.matching import ReconciliationEngine
+from backend.app.services.ai_investigator import AIInvestigator
+from backend.app.services.cash_engine import CashEngine
+from backend.app.config import get_settings
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
@@ -76,27 +93,144 @@ async def list_canonical(skip: int = 0, limit: int = 100, db: AsyncSession = Dep
 
 router_reconciliation = APIRouter(prefix="/reconciliation", tags=["reconciliation"])
 
+# Separate router for exceptions without /reconciliation prefix
+router_exceptions = APIRouter(prefix="/exceptions", tags=["exceptions"])
 
-@router_reconciliation.post("/run", response_model=ReconciliationRunResponse)
-async def run_reconciliation(request: ReconciliationRunRequest, db: AsyncSession = Depends(get_db)):
+
+@router_reconciliation.post("/run", response_model=None)
+async def run_reconciliation(request: dict, db: AsyncSession = Depends(get_db)):
+    """Run full reconciliation pipeline."""
+    import time
     from backend.app.services.matching import ReconciliationEngine
     from backend.app.services.ai_investigator import AIInvestigator
     from backend.app.services.cash_engine import CashEngine
     from backend.app.config import get_settings
+    from backend.app.schemas.canonical import ReconciliationRunResponse, ReconciliationStats
+    from backend.app.schemas.canonical import ReconciliationRunResponse, ReconciliationStats
+    from backend.app.schemas.canonical import PaginatedMatchResponse
     
+    start_time = time.time()
     settings = get_settings()
     engine = ReconciliationEngine(settings.matching)
     ai = AIInvestigator(settings.ai)
     cash = CashEngine(settings.app.opening_cash)
     
-    # This will be implemented in the services
-    return ReconciliationRunResponse(
-        total_records=0,
-        matched=0,
-        probable_matches=0,
-        exceptions=0,
-        processing_time_seconds=0.0
+    # 1. Get all canonical transactions
+    from sqlalchemy import select
+    from backend.app.db.models import CanonicalTransaction
+    result = await db.execute(select(CanonicalTransaction))
+    transactions = list(result.scalars().all())
+    
+    if not transactions:
+        return {
+            "stats": ReconciliationStats(
+                total_records=0, matched=0, probable_matches=0, exceptions=0,
+                processing_time_seconds=0.0
+            ).model_dump(),
+            matches: [],
+            exceptions: [],
+            cash_position: None,
+            forecast_summary: {}
+            }
+    
+    # Run reconciliation
+    engine = ReconciliationEngine(settings.matching)
+    ai = AIInvestigator(settings.ai)
+    cash = CashEngine(settings.app.opening_cash)
+    
+    result = await engine.run(db, transactions)
+    all_matches = result["matches"]
+    all_exceptions = result["exceptions"]
+    
+    # AI investigation for exceptions
+    ai = AIInvestigator(settings.ai)
+    
+    for exc in result["exceptions"]:
+        try:
+            exc_result = await db.execute(select(Exception).where(Exception.id == exc.id))
+            exc_obj = exc_result.scalar_one_or_none()
+            if exc_obj:
+                resolution = await ai.investigate(db, exc_obj)
+                if resolution.confidence < settings.ai.confidence_auto_resolve:
+                    resolution.status = ResolutionStatus.ESCALATED
+                    resolution.explanation += f" [Auto-escalated: confidence {resolution.confidence:.2f} below threshold {settings.ai.confidence_auto_resolve}]"
+                
+                resolution.validated = True
+                db.add(resolution)
+                await db.commit()
+                await db.refresh(resolution)
+                
+                exc_obj.status = resolution.status
+                await db.commit()
+        except Exception as e:
+            # Auto-escalate on any error
+            await ai_investigator.close()
+            raise HTTPException(500, f"Investigation failed: {str(e)}")
+    
+    # Calculate cash position
+    cash_position = await cash.calculate_position(db)
+    
+    # Generate forecast
+    forecast_entries = await cash.generate_forecast(db)
+    
+    # Prepare response
+    end_time = time.time()
+    processing_time = end_time - start_time
+    
+    # Prepare response
+    matches = result["matches"]
+    exceptions = result["exceptions"]
+    
+    # Get matches with details
+    match_objects = []
+    for m in matches:
+        match_obj = await db.get(Match, m.id)
+        if match_obj:
+            match_objects.append(match_obj)
+    
+    exception_objects = []
+    for exc in exceptions:
+        exc_obj = await db.get(Exception, exc.id)
+        if exc_obj:
+            exception_objects.append(exc_obj)
+    
+    # Get cash position
+    cash_position = await db.get(CashPosition, cash_position.id) if cash_position else None
+    
+    # Get forecast summary
+    forecast_entries = await db.execute(select(ForecastEntry))
+    forecast_entries = forecast_entries.scalars().all()
+    
+    horizons = [7, 14, 30]
+    forecast_summary = {}
+    for horizon in [7, 14, 30]:
+        inflows = sum(e.amount for e in forecast_entries if e.horizon_days <= horizon and e.amount > 0)
+        outflows = sum(abs(e.amount) for e in forecast_entries if e.horizon_days <= horizon and e.amount < 0)
+        forecast_summary[horizon] = {
+            "inflows": float(inflows),
+            "outflows": float(outflows),
+            "net": float(inflows - outflows)
+        }
+    
+    # Build response
+    matched_count = len([m for m in matches if m.status == MatchStatus.MATCHED])
+    probable_count = len([m for m in matches if m.status == MatchStatus.PROBABLE_MATCH])
+    
+    stats = ReconciliationStats(
+        total_records=len(transactions),
+        matched=len([m for m in matches if m.status == MatchStatus.MATCHED]),
+        probable_matches=len([m for m in matches if m.status == MatchStatus.PROBABLE_MATCH]),
+        exceptions=len(exceptions),
+        processing_time_seconds=time.time() - start_time
     )
+    
+    return {
+        "stats": stats.model_dump(),
+        matches: match_objects,
+        exceptions: exception_objects,
+        cash_position: cash_position.model_dump() if cash_position else None,
+        forecast_summary: forecast_summary
+    }
 
 
 @router_reconciliation.get("/results", response_model=List[MatchRead])
@@ -105,15 +239,30 @@ async def get_matches(skip: int = 0, limit: int = 100, db: AsyncSession = Depend
     return result.scalars().all()
 
 
-from backend.app.services.ai_investigator import AIInvestigator
-from backend.app.services.cash_engine import CashEngine
-from backend.app.config import get_settings
+@router_reconciliation.get("/results/paginated", response_model=PaginatedMatchResponse)
+async def get_matches_paginated(page: int = 1, limit: int = 50, status: str = None, db: AsyncSession = Depends(get_db)):
+    query = select(Match)
+    if status:
+        query = query.where(Match.status == status)
+    # Get total count
+    from sqlalchemy import func
+    count_result = await db.execute(select(func.count(Match.id)))
+    total = count_result.scalar()
+    
+    query = query.offset((page - 1) * limit).limit(limit)
+    result = await db.execute(query)
+    items = result.scalars().all()
+    
+    return PaginatedMatchResponse(
+        items=items,
+        total=total,
+        page=page,
+        limit=limit
+    )
 
-router_exceptions = APIRouter(prefix="/exceptions", tags=["exceptions"])
 
-
-@router_exceptions.get("/", response_model=List[ExceptionRead])
-async def list_exceptions(status: str = None, skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
+@router_reconciliation.get("/exceptions", response_model=List[ExceptionRead])
+async def get_exceptions(status: str = None, skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
     query = select(Exception)
     if status:
         query = query.where(Exception.status == status)
@@ -122,18 +271,9 @@ async def list_exceptions(status: str = None, skip: int = 0, limit: int = 100, d
     return result.scalars().all()
 
 
-@router_exceptions.get("/{exc_id}", response_model=ExceptionRead)
-async def get_exception(exc_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Exception).where(Exception.id == exc_id))
-    exc = result.scalar_one_or_none()
-    if not exc:
-        raise HTTPException(404, "Exception not found")
-    return exc
-
-
-@router_exceptions.post("/{exc_id}/investigate", response_model=dict)
-async def investigate_exception(exc_id: int, db: AsyncSession = Depends(get_db)):
-    """Investigate an exception using AI investigator."""
+@router_reconciliation.post("/exceptions/{exc_id}/investigate", response_model=dict)
+async def investigate_exception_reconciliation(exc_id: int, db: AsyncSession = Depends(get_db)):
+    """Investigate an exception using AI investigator (under /reconciliation prefix)."""
     settings = get_settings()
     ai_investigator = AIInvestigator(settings.ai)
     
@@ -159,7 +299,8 @@ async def investigate_exception(exc_id: int, db: AsyncSession = Depends(get_db))
         await db.refresh(resolution)
         
         # Update exception status
-        exc.status = resolution.status
+        exc_obj = await db.get(Exception, exc_id)
+        exc_obj.status = resolution.status
         await db.commit()
         
         return {
@@ -179,8 +320,61 @@ async def investigate_exception(exc_id: int, db: AsyncSession = Depends(get_db))
         raise HTTPException(500, f"Investigation failed: {str(e)}")
 
 
-from backend.app.services.cash_engine import CashEngine
-from backend.app.config import get_settings
+# Separate router for exceptions without /reconciliation prefix
+router_exceptions = APIRouter(prefix="/exceptions", tags=["exceptions"])
+
+
+@router_exceptions.post("/{exc_id}/investigate", response_model=dict)
+async def investigate_exception(exc_id: int, db: AsyncSession = Depends(get_db)):
+    """Investigate an exception using AI investigator (under /exceptions prefix)."""
+    settings = get_settings()
+    ai_investigator = AIInvestigator(settings.ai)
+    
+    try:
+        # Get the exception
+        result = await db.execute(select(Exception).where(Exception.id == exc_id))
+        exc = result.scalar_one_or_none()
+        if not exc:
+            raise HTTPException(404, "Exception not found")
+        
+        # Run AI investigation
+        resolution = await ai_investigator.investigate(db, exc)
+        
+        # Validate confidence threshold
+        if resolution.confidence < settings.ai.confidence_auto_resolve:
+            resolution.status = ResolutionStatus.ESCALATED
+            resolution.explanation += f" [Auto-escalated: confidence {resolution.confidence:.2f} below threshold {settings.ai.confidence_auto_resolve}]"
+        
+        # Mark as validated and save
+        resolution.validated = True
+        db.add(resolution)
+        await db.commit()
+        await db.refresh(resolution)
+        
+        # Update exception status
+        exc_obj = await db.get(Exception, exc_id)
+        exc_obj.status = resolution.status
+        await db.commit()
+        
+        return {
+            "status": "completed",
+            "exception_id": exc_id,
+            "resolution_id": resolution.id,
+            "status": resolution.status.value,
+            "classification": resolution.classification.value,
+            "confidence": resolution.confidence,
+            "explanation": resolution.explanation,
+            "evidence": resolution.evidence,
+            "recommended_action": resolution.recommended_action,
+        }
+    except Exception as e:
+        # Auto-escalate on any error
+        await ai_investigator.close()
+        raise HTTPException(500, f"Investigation failed: {str(e)}")
+
+
+router_metrics = APIRouter(prefix="/metrics", tags=["metrics"])
+
 
 router_cash = APIRouter(prefix="/cash", tags=["cash"])
 
@@ -269,14 +463,8 @@ async def get_forecast_summary(days: int = 30, db: AsyncSession = Depends(get_db
     summary = {}
     for horizon in horizons:
         if horizon <= days:
-            inflows = Decimal("0")
-            outflows = Decimal("0")
-            for entry in entries:
-                if entry.horizon_days <= horizon:
-                    if entry.amount > 0:
-                        inflows += entry.amount
-                    else:
-                        outflows += abs(entry.amount)
+            inflows = sum(e.amount for e in entries if e.horizon_days <= horizon and e.amount > 0)
+            outflows = abs(sum(e.amount for e in entries if e.horizon_days <= horizon and e.amount < 0))
             summary[horizon] = {
                 "inflows": float(inflows),
                 "outflows": float(outflows),

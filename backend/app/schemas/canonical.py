@@ -224,12 +224,27 @@ class ReconciliationRunRequest(BaseModel):
     force_rerun: bool = False
 
 
-class ReconciliationRunResponse(BaseModel):
+class ReconciliationStats(BaseModel):
     total_records: int
     matched: int
     probable_matches: int
     exceptions: int
     processing_time_seconds: float
+
+
+class ReconciliationRunResponse(BaseModel):
+    stats: ReconciliationStats
+    matches: List[MatchRead]
+    exceptions: List[ExceptionRead]
+    cash_position: CashPositionRead
+    forecast_summary: Dict[int, Dict[str, float]]
+
+
+class PaginatedMatchResponse(BaseModel):
+    items: List[MatchRead]
+    total: int
+    page: int
+    limit: int
 
 
 class MetricsResponse(BaseModel):
@@ -244,3 +259,5 @@ class MetricsResponse(BaseModel):
     exceptions_unresolved: int
     processing_time_seconds: float
     cash_variance: Decimal
+    ai_resolution_rate: float
+    ai_accuracy: float

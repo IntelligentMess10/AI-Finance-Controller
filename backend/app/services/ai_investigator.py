@@ -3,6 +3,7 @@ from decimal import Decimal
 from datetime import date
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from backend.app.api import transactions
 from backend.app.db.models import CanonicalTransaction, Exception, Resolution, ResolutionStatus, ExceptionType, AuditLog, AuditAction, TransactionSource
 from backend.app.schemas.canonical import AIResolution
 from backend.app.services.llm_providers import LLMProvider, get_provider, LLMMessage
@@ -145,11 +146,32 @@ Determine the root cause and classify the exception.
                 for tool_call in response.tool_calls:
                     result = await self._execute_tool(db, tool_call)
                     tool_results.append(result)
-                    messages.append(LLMMessage(role="tool", content=str(result.result), tool_calls=[tool_call]))
+                messages.append(LLMMessage(
+                    role="assistant",
+                    content=response.content or "",
+                    tool_calls=response.tool_calls,
+                ))
+                for tool_call, result in zip(response.tool_calls, tool_results[-len(response.tool_calls):]):
+                    messages.append(LLMMessage(
+                        role="tool",
+                        content=str(result["result"]),
+                        tool_call_id=tool_call.id,
+                    ))
             else:
                 break
         
-        final_response = await self.provider.complete(messages, response_format={"type": "json_object"})
+        messages.append(LLMMessage(
+            role="user",
+            content=(
+                "Using only the transaction details and tool results already provided, "
+                "make the final decision now. Do not call tools. Return only the required "
+                "JSON object matching the output format."
+            ),
+        ))
+        final_response = await self.provider.complete(
+            messages,
+            response_format={"type": "json_object"},
+        )
         
         import json
         ai_output = json.loads(final_response.content)
@@ -346,24 +368,25 @@ Determine the root cause and classify the exception.
         
         # Search for processor record that matches the ledger/bank pair
         # Look for processor with same counterparty, similar date, and amount close to ledger amount
-        ledger_amount = txn.amount
-        
         from backend.app.db.models import TransactionSource
-        for txn in transactions:
-            if txn.source != TransactionSource.PROCESSOR:
-                continue
-            if txn.counterparty != ledger_txn.counterparty:
-                continue
-            # Check if processor amount matches ledger amount (gross amount)
-            if abs(txn.amount - ledger_txn.amount) <= Decimal("1.00"):
+        result = await db.execute(
+            select(CanonicalTransaction).where(
+                CanonicalTransaction.source == TransactionSource.PROCESSOR,
+                CanonicalTransaction.counterparty == txn.counterparty,
+            )
+        )
+        for processor_txn in result.scalars().all():
+            # Check if processor amount matches the canonical amount (gross amount).
+            if abs(processor_txn.amount - txn.amount) <= Decimal("1.00"):
                 # Found matching processor record, extract fee from metadata
-                fee_str = txn.txn_metadata.get("processor_fee")
+                fee_str = processor_txn.txn_metadata.get("processor_fee")
                 if fee_str is not None:
                     try:
-                        return Decimal(fee_str)
-                    except:
+                        Decimal(str(fee_str))
+                        return True
+                    except (ArithmeticError, ValueError):
                         pass
-        return None
+        return False
     
     async def _verify_date_mismatch(self, db: AsyncSession, exception: Exception) -> bool:
         """Verify that a date mismatch explanation is supported by data."""

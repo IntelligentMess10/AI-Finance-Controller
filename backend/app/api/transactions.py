@@ -5,6 +5,7 @@ from typing import List, Dict, Any
 from datetime import date
 from decimal import Decimal
 import time
+import builtins
 
 from backend.app.db.session import get_db
 from backend.app.db.models import (
@@ -162,7 +163,7 @@ async def run_reconciliation(request: dict, db: AsyncSession = Depends(get_db)):
                 
                 exc_obj.status = resolution.status
                 await db.commit()
-        except Exception as e:
+        except builtins.Exception as e:
             # Auto-escalate on any error
             await ai_investigator.close()
             raise HTTPException(500, f"Investigation failed: {str(e)}")
@@ -314,7 +315,7 @@ async def investigate_exception_reconciliation(exc_id: int, db: AsyncSession = D
             "evidence": resolution.evidence,
             "recommended_action": resolution.recommended_action,
         }
-    except Exception as e:
+    except builtins.Exception as e:
         # Auto-escalate on any error
         await ai_investigator.close()
         raise HTTPException(500, f"Investigation failed: {str(e)}")
@@ -367,7 +368,7 @@ async def investigate_exception(exc_id: int, db: AsyncSession = Depends(get_db))
             "evidence": resolution.evidence,
             "recommended_action": resolution.recommended_action,
         }
-    except Exception as e:
+    except builtins.Exception as e:
         # Auto-escalate on any error
         await ai_investigator.close()
         raise HTTPException(500, f"Investigation failed: {str(e)}")

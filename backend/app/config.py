@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic.types import SecretStr
@@ -30,7 +30,7 @@ def load_env_file():
                 line = line.strip()
                 if line and not line.startswith("#") and "=" in line:
                     key, value = line.split("=", 1)
-                    os.environ.setdefault(key.strip(), value.strip())
+                    os.environ[key.strip()] = value.strip()
 
 
 class MatchingWeights(BaseSettings):
@@ -65,7 +65,7 @@ class OllamaConfig(BaseSettings):
 
 class GroqConfig(BaseSettings):
     api_key: Optional[SecretStr] = None
-    model: str = "llama-3.1-8b-instant"
+    model: str = "openai/gpt-oss-20b"
 
 
 class OpenAICompatibleConfig(BaseSettings):

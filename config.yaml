@@ -28,14 +28,14 @@ matching:
   amount_tolerance_pct: 0.001
 
 ai:
-  provider: "mock"
+  provider: "${AI_PROVIDER}"
   ollama:
     base_url: "http://localhost:11434"
     model: "llama3.1:8b"
     timeout: 30
   groq:
     api_key: "${GROQ_API_KEY}"
-    model: "llama-3.1-8b-instant"
+    model: "openai/gpt-oss-20b"
   openai_compatible:
     base_url: "${OPENAI_BASE_URL}"
     api_key: "${OPENAI_API_KEY}"

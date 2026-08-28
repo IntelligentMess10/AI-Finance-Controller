@@ -8,6 +8,7 @@ import json
 class ToolCall(BaseModel):
     name: str
     arguments: Dict[str, Any]
+    id: Optional[str] = None
 
 
 class ToolResult(BaseModel):
@@ -20,12 +21,54 @@ class LLMMessage(BaseModel):
     role: str
     content: str
     tool_calls: Optional[List[ToolCall]] = None
+    tool_call_id: Optional[str] = None
 
 
 class LLMResponse(BaseModel):
     content: str
     tool_calls: Optional[List[ToolCall]] = None
-    usage: Optional[Dict[str, int]] = None
+    usage: Optional[Dict[str, Any]] = None
+
+
+def normalize_tool_calls(raw_tool_calls: Optional[List[Dict[str, Any]]]) -> Optional[List[ToolCall]]:
+    """Normalize OpenAI-compatible tool calls to the provider-neutral model."""
+    if not raw_tool_calls:
+        return None
+
+    normalized = []
+    for tool_call in raw_tool_calls:
+        function = tool_call.get("function", {})
+        arguments = function.get("arguments", {})
+        if isinstance(arguments, str):
+            arguments = json.loads(arguments)
+        normalized.append(ToolCall(
+            id=tool_call.get("id"),
+            name=function["name"],
+            arguments=arguments,
+        ))
+    return normalized
+
+
+def serialize_messages(messages: List[LLMMessage]) -> List[Dict[str, Any]]:
+    serialized = []
+    for message in messages:
+        item: Dict[str, Any] = {"role": message.role, "content": message.content}
+        if message.role == "assistant" and message.tool_calls:
+            item["tool_calls"] = [
+                {
+                    "id": tool_call.id,
+                    "type": "function",
+                    "function": {
+                        "name": tool_call.name,
+                        "arguments": json.dumps(tool_call.arguments),
+                    },
+                }
+                for tool_call in message.tool_calls
+            ]
+        if message.role == "tool" and message.tool_call_id:
+            item["tool_call_id"] = message.tool_call_id
+        serialized.append(item)
+    return serialized
 
 
 class LLMProvider(ABC):
@@ -113,7 +156,7 @@ class OllamaProvider(LLMProvider):
 
 
 class GroqProvider(LLMProvider):
-    def __init__(self, api_key: str, model: str = "llama-3.1-8b-instant", timeout: int = 30):
+    def __init__(self, api_key: str, model: str = "openai/gpt-oss-20b", timeout: int = 30):
         self.api_key = api_key
         self.model = model
         self.client = httpx.AsyncClient(
@@ -131,7 +174,7 @@ class GroqProvider(LLMProvider):
     ) -> LLMResponse:
         payload = {
             "model": self.model,
-            "messages": [{"role": m.role, "content": m.content} for m in messages],
+            "messages": serialize_messages(messages),
             "temperature": 0.1,
         }
         
@@ -143,12 +186,15 @@ class GroqProvider(LLMProvider):
             payload["response_format"] = {"type": "json_object"}
 
         response = await self.client.post("/chat/completions", json=payload)
-        response.raise_for_status()
+        if response.is_error:
+            raise RuntimeError(
+                f"Groq API error ({response.status_code}): {response.text}"
+            )
         data = response.json()
         
         choice = data["choices"][0]
         content = choice["message"].get("content", "")
-        tool_calls = choice["message"].get("tool_calls")
+        tool_calls = normalize_tool_calls(choice["message"].get("tool_calls"))
         
         return LLMResponse(content=content, tool_calls=tool_calls, usage=data.get("usage"))
 
@@ -175,7 +221,7 @@ class OpenAICompatibleProvider(LLMProvider):
     ) -> LLMResponse:
         payload = {
             "model": self.model,
-            "messages": [{"role": m.role, "content": m.content} for m in messages],
+            "messages": serialize_messages(messages),
             "temperature": 0.1,
         }
         
@@ -192,7 +238,7 @@ class OpenAICompatibleProvider(LLMProvider):
         
         choice = data["choices"][0]
         content = choice["message"].get("content", "")
-        tool_calls = choice["message"].get("tool_calls")
+        tool_calls = normalize_tool_calls(choice["message"].get("tool_calls"))
         
         return LLMResponse(content=content, tool_calls=tool_calls, usage=data.get("usage"))
 

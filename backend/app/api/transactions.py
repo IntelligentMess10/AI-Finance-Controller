@@ -372,6 +372,15 @@ async def investigate_exception(exc_id: int, db: AsyncSession = Depends(get_db))
         # Auto-escalate on any error
         await ai_investigator.close()
         raise HTTPException(500, f"Investigation failed: {str(e)}")
+    
+@router_exceptions.get("/", response_model=List[ExceptionRead])
+async def get_exceptions(status: str = None, skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
+    query = select(Exception)
+    if status:
+        query = query.where(Exception.status == status)
+    query = query.offset(skip).limit(limit)
+    result = await db.execute(query)
+    return result.scalars().all()
 
 
 router_metrics = APIRouter(prefix="/metrics", tags=["metrics"])

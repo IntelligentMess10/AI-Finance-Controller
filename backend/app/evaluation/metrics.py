@@ -22,7 +22,12 @@ class EvaluationEngine:
         # 2. Get all matches
         match_result = await db.execute(select(Match))
         matches = match_result.scalars().all()
-        matched_records = len([m for m in matches if m.status == MatchStatus.MATCHED])
+        matched_txn_ids = set()
+        for m in matches:
+            if m.status == MatchStatus.MATCHED:
+                matched_txn_ids.add(m.canonical_transaction_id)
+                matched_txn_ids.add(m.matched_transaction_id)
+        matched_records = len(matched_txn_ids)
         probable_records = len([m for m in matches if m.status == MatchStatus.PROBABLE_MATCH])
 
         # 3. Get exceptions

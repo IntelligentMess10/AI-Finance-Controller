@@ -316,7 +316,7 @@ def render_exception_investigation_result(resolution: dict) -> None:
         </div>
         <div style="display: flex; gap: 1.5rem; margin: 1rem 0; font-size: 0.875rem; color: #8B949E;">
             <span><strong>Classification:</strong> {resolution['classification'].replace('_', ' ').title()}</span>
-            <span><strong>Confidence:</strong> {resolution['confidence']:.0%}</span>
+            <span><strong>Confidence:</strong> {float(resolution['confidence']):.0%}</span>
         </div>
         <div style="color: #E6EDF3; margin-top: 1rem;">
             {resolution['explanation']}

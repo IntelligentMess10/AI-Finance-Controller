@@ -26,13 +26,20 @@ def render_cash_position():
     # Render breakdown
     render_cash_position_breakdown(cash_position)
     
-    # Forecast
-    st.markdown("### Forecast")
+    # Forecast - 30-day chart
+    st.markdown("### Cash Flow Forecast")
     from dashboard.components.forecast_chart import render_forecast_chart_card
-
+    
     forecast = api_get("/cash/forecast", {"days": 30})
     if forecast:
         render_forecast_chart_card(forecast, title="30-Day Cash Flow Forecast")
+    
+    # Forecast Summary - 7/14/30 day horizons
+    st.markdown("### Forecast Summary by Horizon")
+    from dashboard.components.forecast_chart import render_forecast_summary_card
+    
+    if forecast:
+        render_forecast_summary_card(forecast, title="Forecast Summary (7/14/30 Days)")
 
 
 if __name__ == "__main__":

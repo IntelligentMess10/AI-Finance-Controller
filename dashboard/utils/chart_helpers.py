@@ -437,6 +437,8 @@ def create_forecast_summary_chart(
         return apply_base_layout(fig, title="Forecast Summary", height=200)
     
     df = pd.DataFrame(forecast_entries)
+    df['amount'] = pd.to_numeric(df['amount'], errors='coerce')  # Add this line
+    df['horizon_days'] = pd.to_numeric(df['horizon_days'], errors='coerce') 
     
     summary_data = []
     for h in horizons:

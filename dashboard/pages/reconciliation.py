@@ -14,13 +14,30 @@ def render_reconciliation():
     
     st.markdown('<div class="section-header">Reconciliation Results</div>', unsafe_allow_html=True)
     
-    # Fetch matches
-    with st.spinner("Loading reconciliation results..."):
-        matches = api_get("/reconciliation/results")
+    # Initialize pagination state
+    if 'match_page' not in st.session_state:
+        st.session_state['match_page'] = 1
+    if 'match_page_size' not in st.session_state:
+        st.session_state['match_page_size'] = 100
     
-    if not matches:
+    # Fetch matches (paginated)
+    with st.spinner("Loading reconciliation results..."):
+        from dashboard.utils.api_client import get_api_client
+        client = get_api_client()
+        result = client.get_matches_paginated(
+            page=st.session_state['match_page'],
+            limit=st.session_state['match_page_size']
+        )
+    
+    if not result or not result.get('items'):
         st.info("No matches found. Run reconciliation first.")
         return
+    
+    matches = result['items']
+    total = result.get('total', len(matches))
+    page = result.get('page', 1)
+    limit = result.get('limit', st.session_state['match_page_size'])
+    total_pages = (total + limit - 1) // limit
     
     df = pd.DataFrame(matches)
     
@@ -32,7 +49,6 @@ def render_reconciliation():
     df['score_fmt'] = df['score'].apply(lambda x: f"{x:.2%}")
     df['status_fmt'] = df['status'].str.replace('_', ' ').str.title()
     df['method_fmt'] = df['method'].str.replace('_', ' ').str.title()
-    # df['amount_fmt'] = df['amount'].apply(lambda x: f"₹{x:,.2f}" if pd.notna(x) else "—")
     
     # Filters
     st.markdown("### Filters")
@@ -49,16 +65,61 @@ def render_reconciliation():
     with col3:
         min_score = st.slider("Min Score", 0.0, 1.0, 0.0, 0.05, key="min_score_filter")
     
-    # Apply filters
+    # Apply filters (client-side on current page)
     filtered = df[
         (df['status'].isin(status_filter) if status_filter else True) &
         (df['method'].isin(method_filter) if method_filter else True) &
         (df['score'] >= min_score)
     ]
     
+    # Pagination controls
+    st.markdown("### Pagination")
+    pcol1, pcol2, pcol3, pcol4 = st.columns([1, 2, 2, 1])
+    
+    with pcol1:
+        st.write(f"**Total:** {total} matches")
+    
+    with pcol2:
+        if st.button("← Previous", disabled=(page <= 1), use_container_width=True):
+            st.session_state['match_page'] = max(1, page - 1)
+            st.rerun()
+    
+    with pcol3:
+        # Page selector
+        page_options = list(range(1, total_pages + 1))
+        if page_options:
+            selected_page = st.selectbox(
+                f"Page (of {total_pages})",
+                options=page_options,
+                index=page - 1 if page <= total_pages else 0,
+                key="match_page_selector"
+            )
+            if selected_page != page:
+                st.session_state['match_page'] = selected_page
+                st.rerun()
+    
+    with pcol4:
+        if st.button("Next →", disabled=(page >= total_pages), use_container_width=True):
+            st.session_state['match_page'] = min(total_pages, page + 1)
+            st.rerun()
+    
+    # Page size selector
+    ps_col1, ps_col2 = st.columns([1, 3])
+    with ps_col1:
+        page_size = st.selectbox(
+            "Per page",
+            options=[50, 100, 200, 500],
+            index=[50, 100, 200, 500].index(limit) if limit in [50, 100, 200, 500] else 1,
+            key="match_page_size_selector"
+        )
+        if page_size != st.session_state['match_page_size']:
+            st.session_state['match_page_size'] = page_size
+            st.session_state['match_page'] = 1
+            st.rerun()
+    
     # Display table
     st.dataframe(
-        df[['id', 'canonical_transaction_id', 'matched_transaction_id', 'score_fmt', 'method', 'status']],
+        filtered[['id', 'canonical_transaction_id', 'matched_transaction_id', 'score_fmt', 'method', 'status']],
         use_container_width=True,
         hide_index=True,
         column_config={
@@ -71,7 +132,7 @@ def render_reconciliation():
         },
     )
     
-    st.caption(f"Showing {len(filtered)} of {len(matches)} matches")
+    st.caption(f"Showing {len(filtered)} of {len(matches)} matches on page {page}/{total_pages} (Total: {total})")
 
 
 if __name__ == "__main__":

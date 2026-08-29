@@ -113,12 +113,18 @@ def render_variance_breakdown_card(
     from dashboard.utils.formatters import format_inr
     from dashboard.styles.theme import STATUS_COLORS
     
+    confirmed_inflows = float(cash_position.get('confirmed_inflows', 0))
+    confirmed_outflows = float(cash_position.get('confirmed_outflows', 0))
+    pending_inflows = float(cash_position.get('pending_inflows', 0))
+    pending_outflows = float(cash_position.get('pending_outflows', 0))
+    adjustments = float(cash_position.get('adjustments', 0))
+    
     variance_components = {
-        "Confirmed Inflows": cash_position.get('confirmed_inflows', 0),
-        "Confirmed Outflows": -cash_position.get('confirmed_outflows', 0),
-        "Pending Inflows": cash_position.get('pending_inflows', 0),
-        "Pending Outflows": -cash_position.get('pending_outflows', 0),
-        "Adjustments": cash_position.get('adjustments', 0),
+        "Confirmed Inflows": confirmed_inflows,
+        "Confirmed Outflows": -confirmed_outflows,
+        "Pending Inflows": pending_inflows,
+        "Pending Outflows": -pending_outflows,
+        "Adjustments": adjustments,
     }
     
     for label, value in variance_components.items():

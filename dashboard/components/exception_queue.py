@@ -41,8 +41,8 @@ def render_exception_queue(
     df['status_display'] = df['status'].apply(lambda x: x.replace('_', ' ').title())
     df['type_display'] = df['type'].str.replace('_', ' ').str.title()
     
-    tabs = st.tabs(["All", "Open", "Investigating", "Resolved", "Escalated", "Unresolved"])
-    statuses = ["All", "open", "investigating", "resolved", "escalated", "unresolved"]
+    # tabs = st.tabs(["All", "Open", "Investigating", "Resolved", "Escalated", "Unresolved"])
+    # statuses = ["All", "open", "investigating", "resolved", "escalated", "unresolved"]
     
     for tab, status in zip(st.tabs(["All", "Open", "Investigating", "Resolved", "Escalated", "Unresolved"]), 
                            ["All", "open", "investigating", "resolved", "escalated", "unresolved"]):
@@ -333,65 +333,65 @@ def render_exception_investigation_result(resolution: dict) -> None:
     ''', unsafe_allow_html=True)
 
 
-def render_exception_queue(exceptions: list, on_investigate=None) -> None:
-    """Render full exception queue with tabs and actions."""
-    st.markdown('<div class="section-header">Exception Queue</div>', unsafe_allow_html=True)
+# def render_exception_queue(exceptions: list, on_investigate=None) -> None:
+#     """Render full exception queue with tabs and actions."""
+#     st.markdown('<div class="section-header">Exception Queue</div>', unsafe_allow_html=True)
     
-    if not exceptions:
-        st.info("No exceptions found")
-        return
+#     if not exceptions:
+#         st.info("No exceptions found")
+#         return
     
-    df = pd.DataFrame(exceptions)
-    df['confidence_fmt'] = df['confidence'].apply(lambda x: f"{x:.0%}" if pd.notna(x) else "—")
-    df['status_display'] = df['status'].apply(lambda x: x.replace('_', ' ').title())
-    df['type_display'] = df['type'].str.replace('_', ' ').str.title()
+#     df = pd.DataFrame(exceptions)
+#     df['confidence_fmt'] = df['confidence'].apply(lambda x: f"{x:.0%}" if pd.notna(x) else "—")
+#     df['status_display'] = df['status'].apply(lambda x: x.replace('_', ' ').title())
+#     df['type_display'] = df['type'].str.replace('_', ' ').str.title()
     
-    tabs = st.tabs(["All", "Open", "Investigating", "Resolved", "Escalated", "Unresolved"])
-    statuses = ["All", "open", "investigating", "resolved", "escalated", "unresolved"]
+#     tabs = st.tabs(["All", "Open", "Investigating", "Resolved", "Escalated", "Unresolved"])
+#     statuses = ["All", "open", "investigating", "resolved", "escalated", "unresolved"]
     
-    for tab, status in zip(tabs, statuses):
-        with tab:
-            if status == "All":
-                filtered = df
-            else:
-                filtered = df[df['status'] == status]
+#     for tab, status in zip(tabs, statuses):
+#         with tab:
+#             if status == "All":
+#                 filtered = df
+#             else:
+#                 filtered = df[df['status'] == status]
             
-            if len(filtered) == 0:
-                st.info(f"No {status} exceptions")
-                continue
+#             if len(filtered) == 0:
+#                 st.info(f"No {status} exceptions")
+#                 continue
             
-            display_df = filtered.copy()
-            display_df['confidence'] = display_df['confidence'].apply(lambda x: f"{x:.0%}" if pd.notna(x) else "—")
-            display_df['status'] = display_df['status'].apply(lambda x: x.replace('_', ' ').title())
-            display_df['type'] = display_df['type'].str.replace('_', ' ').str.title()
+#             display_df = filtered.copy()
+#             display_df['confidence'] = display_df['confidence'].apply(lambda x: f"{x:.0%}" if pd.notna(x) else "—")
+#             display_df['status'] = display_df['status'].apply(lambda x: x.replace('_', ' ').title())
+#             display_df['type'] = display_df['type'].str.replace('_', ' ').str.title()
             
-            st.dataframe(
-                display_df[['id', 'transaction_id', 'type', 'severity', 'status', 'confidence', 'description']],
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "id": st.column_config.NumberColumn("Exc ID", width="small"),
-                    "transaction_id": st.column_config.NumberColumn("Txn ID", width="small"),
-                    "type": st.column_config.TextColumn("Type", width="medium"),
-                    "severity": st.column_config.TextColumn("Severity", width="small"),
-                    "status": st.column_config.TextColumn("Status", width="small"),
-                    "confidence": st.column_config.TextColumn("Confidence", width="small"),
-                    "description": st.column_config.TextColumn("Description", width="large"),
-                }
-            )
+#             st.dataframe(
+#                 display_df[['id', 'transaction_id', 'type', 'severity', 'status', 'confidence', 'description']],
+#                 use_container_width=True,
+#                 hide_index=True,
+#                 column_config={
+#                     "id": st.column_config.NumberColumn("Exc ID", width="small"),
+#                     "transaction_id": st.column_config.NumberColumn("Txn ID", width="small"),
+#                     "type": st.column_config.TextColumn("Type", width="medium"),
+#                     "severity": st.column_config.TextColumn("Severity", width="small"),
+#                     "status": st.column_config.TextColumn("Status", width="small"),
+#                     "confidence": st.column_config.TextColumn("Confidence", width="small"),
+#                     "description": st.column_config.TextColumn("Description", width="large"),
+#                 }
+#             )
             
-            if status in ["All", "open", "investigating"]:
-                open_exc = filtered[filtered['status'].isin(['open', 'investigating'])]
-                if len(open_exc) > 0:
-                    selected = st.selectbox(
-                        "Select exception to investigate",
-                        options=open_exc['id'].tolist(),
-                        format_func=lambda x: f"Exception #{x} - {filtered[filtered['id']==x]['description'].values[0][:50]}",
-                        key=f"select_{status}"
-                    )
-                    if st.button("🔍 Investigate", key=f"investigate_{status}", type="primary"):
-                        if callable(on_investigate):
-                            on_investigate(selected)
-                        else:
-                            st.session_state['investigate_exc_id'] = selected
-                            st.rerun()
+#             if status in ["All", "open", "investigating"]:
+#                 open_exc = filtered[filtered['status'].isin(['open', 'investigating'])]
+#                 if len(open_exc) > 0:
+#                     selected = st.selectbox(
+#                         "Select exception to investigate",
+#                         options=open_exc['id'].tolist(),
+#                         format_func=lambda x: f"Exception #{x} - {filtered[filtered['id']==x]['description'].values[0][:50]}",
+#                         key=f"select_{status}"
+#                     )
+#                     if st.button("🔍 Investigate", key=f"investigate_{status}", type="primary"):
+#                         if callable(on_investigate):
+#                             on_investigate(selected)
+#                         else:
+#                             st.session_state['investigate_exc_id'] = selected
+#                             st.rerun()

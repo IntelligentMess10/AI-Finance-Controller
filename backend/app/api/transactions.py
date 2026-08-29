@@ -217,12 +217,17 @@ async def run_reconciliation(request: dict, db: AsyncSession = Depends(get_db)):
     matched_count = len([m for m in matches if m.status == MatchStatus.MATCHED])
     probable_count = len([m for m in matches if m.status == MatchStatus.PROBABLE_MATCH])
     
+    processing_time = time.time() - start_time
+    
+    global _last_reconciliation_time
+    _last_reconciliation_time = processing_time
+    
     stats = ReconciliationStats(
         total_records=len(transactions),
         matched=len([m for m in matches if m.status == MatchStatus.MATCHED]),
         probable_matches=len([m for m in matches if m.status == MatchStatus.PROBABLE_MATCH]),
         exceptions=len(exceptions),
-        processing_time_seconds=time.time() - start_time
+        processing_time_seconds=processing_time
     )
     
     return {
@@ -520,6 +525,10 @@ async def add_cash_adjustment(
     return new_position
 
 
+# Store last reconciliation processing time
+_last_reconciliation_time = 0.0
+
+
 router_metrics = APIRouter(prefix="/metrics", tags=["metrics"])
 
 
@@ -527,4 +536,9 @@ router_metrics = APIRouter(prefix="/metrics", tags=["metrics"])
 async def get_metrics(db: AsyncSession = Depends(get_db)):
     from backend.app.evaluation.metrics import EvaluationEngine
     evaluator = EvaluationEngine()
-    return await evaluator.compute_all(db)
+    
+    # Try to get processing time from last reconciliation
+    global _last_reconciliation_time
+    processing_time = _last_reconciliation_time
+    
+    return await evaluator.compute_all(db, processing_time=processing_time)

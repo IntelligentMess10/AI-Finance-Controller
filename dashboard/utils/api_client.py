@@ -14,6 +14,10 @@ from urllib3.util.retry import Retry
 import streamlit as st
 
 
+class APIError(Exception):
+    """Raised when the API client encounters an error."""
+
+
 class APIClient:
     """API Client with caching, retries, and error handling."""
     
@@ -314,8 +318,11 @@ def api_get(endpoint: str, params: dict = None) -> Optional[Any]:
     try:
         return client.get(endpoint, params=params)
     except Exception as e:
+        message = str(e)
+        if "not found" in message.lower():
+            return None
         import streamlit as st
-        st.error(f"API Error: {str(e)}")
+        st.error(f"API Error: {message}")
         return None
 
 

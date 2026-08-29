@@ -32,7 +32,7 @@ def render_reconciliation():
     df['score_fmt'] = df['score'].apply(lambda x: f"{x:.2%}")
     df['status_fmt'] = df['status'].str.replace('_', ' ').str.title()
     df['method_fmt'] = df['method'].str.replace('_', ' ').str.title()
-    df['amount_fmt'] = df['amount'].apply(lambda x: f"₹{x:,.2f}" if pd.notna(x) else "—")
+    # df['amount_fmt'] = df['amount'].apply(lambda x: f"₹{x:,.2f}" if pd.notna(x) else "—")
     
     # Filters
     st.markdown("### Filters")

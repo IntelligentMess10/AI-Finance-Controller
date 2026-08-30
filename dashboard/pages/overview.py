@@ -58,5 +58,5 @@ def render_overview():
 
 if __name__ == "__main__":
     import streamlit as st
-    from dashboard.pages.overview import render_overview
+    from dashboard.pages.Overview import render_overview
     render_overview()

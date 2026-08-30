@@ -1,10 +1,10 @@
 import streamlit as st
 
-from dashboard.pages.overview import render_overview
-from dashboard.pages.reconciliation import render_reconciliation
-from dashboard.pages.exceptions import render_exceptions
-from dashboard.pages.cash_position import render_cash_position
-from dashboard.pages.metrics import render_metrics
+from dashboard.pages.Overview import render_overview
+from dashboard.pages.Reconciliation import render_reconciliation
+from dashboard.pages.Exceptions import render_exceptions
+from dashboard.pages.Cash_Position import render_cash_position
+from dashboard.pages.Metrics import render_metrics
 from dashboard.styles.css import inject_css
 from dashboard.utils.state import init_session_state
 
@@ -14,7 +14,7 @@ def main():
         page_title="AI Finance Controller",
         page_icon="💰",
         layout="wide",
-        initial_sidebar_state="expanded"
+        initial_sidebar_state="collapsed"
     )
     
     inject_css()

@@ -91,5 +91,5 @@ def render_metrics():
 
 if __name__ == "__main__":
     import streamlit as st
-    from dashboard.pages.metrics import render_metrics
+    from dashboard.pages.Metrics import render_metrics
     render_metrics()

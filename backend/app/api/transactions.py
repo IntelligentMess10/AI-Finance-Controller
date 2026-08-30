@@ -246,13 +246,31 @@ async def get_matches(skip: int = 0, limit: int = 100, db: AsyncSession = Depend
 
 
 @router_reconciliation.get("/results/paginated", response_model=PaginatedMatchResponse)
-async def get_matches_paginated(page: int = 1, limit: int = 50, status: str = None, db: AsyncSession = Depends(get_db)):
+async def get_matches_paginated(
+    page: int = 1, 
+    limit: int = 50, 
+    status: str = None, 
+    method: str = None,
+    min_score: float = None,
+    db: AsyncSession = Depends(get_db)
+):
     query = select(Match)
     if status:
         query = query.where(Match.status == status)
+    if method:
+        query = query.where(Match.method == method)
+    if min_score is not None:
+        query = query.where(Match.score >= min_score)
     # Get total count
     from sqlalchemy import func
-    count_result = await db.execute(select(func.count(Match.id)))
+    count_query = select(func.count(Match.id))
+    if status:
+        count_query = count_query.where(Match.status == status)
+    if method:
+        count_query = count_query.where(Match.method == method)
+    if min_score is not None:
+        count_query = count_query.where(Match.score >= min_score)
+    count_result = await db.execute(count_query)
     total = count_result.scalar()
     
     query = query.offset((page - 1) * limit).limit(limit)

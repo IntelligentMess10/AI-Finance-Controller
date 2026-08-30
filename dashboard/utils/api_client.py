@@ -205,10 +205,16 @@ class APIClient:
         page: int = 1,
         limit: int = 50,
         status: str = None,
+        method: str = None,
+        min_score: float = None,
     ) -> Optional[dict]:
         params = {"page": page, "limit": limit}
         if status:
             params["status"] = status
+        if method:
+            params["method"] = method
+        if min_score is not None:
+            params["min_score"] = min_score
         return self.get("/reconciliation/results/paginated", params=params)
     
     def get_exceptions(
@@ -252,10 +258,16 @@ class APIClient:
         page: int = 1,
         limit: int = 50,
         status: str = None,
+        method: str = None,
+        min_score: float = None,
     ) -> Optional[dict]:
         params = {"page": page, "limit": limit}
         if status:
             params["status"] = status
+        if method:
+            params["method"] = method
+        if min_score is not None:
+            params["min_score"] = min_score
         return self.get("/reconciliation/results/paginated", params=params)
     
     def get_exceptions(self, status: str = None, skip: int = 0, limit: int = 100) -> Optional[List]:

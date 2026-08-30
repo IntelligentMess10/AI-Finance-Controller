@@ -37,12 +37,52 @@ def render_reconciliation():
         st.session_state['match_page_size'] = st.session_state['match_page_size_selector']
         st.session_state['match_page'] = 1
     
-    # Fetch matches (paginated) - FIRST to get real total_pages
+    # Filters - FIRST to capture filter state
+    st.markdown("### Filters")
+    col1, col2, col3 = st.columns(3)
+    
+    # We need placeholder status/method options for initial render
+    # These will be updated after fetch
+    if 'match_status_filter' not in st.session_state:
+        st.session_state['match_status_filter'] = ['matched', 'probable_match']
+    if 'match_method_filter' not in st.session_state:
+        st.session_state['match_method_filter'] = []
+    
+    with col1:
+        status_options = ['matched', 'probable_match', 'exception', 'duplicate', 'missing_counterparty']
+        status_filter = st.multiselect(
+            "Status", 
+            options=status_options, 
+            default=st.session_state.get('match_status_filter', status_options), 
+            key="match_status_filter"
+        )
+    
+    with col2:
+        method_options = ['processor_fee_match', 'date_mismatch', 'strong_amount_counterparty_date', 'rounding_difference', 'fuzzy_weighted']
+        method_filter = st.multiselect(
+            "Method", 
+            options=method_options, 
+            default=st.session_state.get('match_method_filter', method_options), 
+            key="match_method_filter"
+        )
+    
+    with col3:
+        min_score = st.slider("Min Score", 0.0, 1.0, 0.0, 0.05, key="min_score_filter")
+    
+    # Determine filter values for API (pass first selected if single, None if multiple/all)
+    api_status = status_filter[0] if len(status_filter) == 1 else None
+    api_method = method_filter[0] if len(method_filter) == 1 else None
+    api_min_score = min_score if min_score > 0 else None
+    
+    # Fetch matches (paginated) with server-side filters
     with st.spinner("Loading reconciliation results..."):
         client = get_api_client()
         result = client.get_matches_paginated(
             page=st.session_state['match_page'],
-            limit=st.session_state['match_page_size']
+            limit=st.session_state['match_page_size'],
+            status=api_status,
+            method=api_method,
+            min_score=api_min_score,
         )
     
     if not result or not result.get('items'):
@@ -66,29 +106,13 @@ def render_reconciliation():
     df['status_fmt'] = df['status'].str.replace('_', ' ').str.title()
     df['method_fmt'] = df['method'].str.replace('_', ' ').str.title()
     
-    # Filters - MOVED ABOVE PAGINATION
-    st.markdown("### Filters")
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        status_options = df['status'].unique().tolist()
-        status_filter = st.multiselect("Status", options=status_options, default=status_options, key="match_status_filter")
-    
-    with col2:
-        method_options = df['method'].unique().tolist()
-        method_filter = st.multiselect("Method", options=method_options, default=method_options, key="method_filter")
-    
-    with col3:
-        min_score = st.slider("Min Score", 0.0, 1.0, 0.0, 0.05, key="min_score_filter")
-    
-    # Apply filters
+    # Apply additional client-side filters (method, min_score) since backend only filters by status
     filtered = df[
-        (df['status'].isin(status_filter) if status_filter else True) &
         (df['method'].isin(method_filter) if method_filter else True) &
         (df['score'] >= min_score)
     ]
     
-    # Pagination controls - render AFTER fetch with correct total_pages
+    # Pagination controls
     st.markdown("### Pagination")
     
     pcol1, pcol2, pcol3, pcol4, pcol5 = st.columns([1.5, 1, 1.5, 1, 1])

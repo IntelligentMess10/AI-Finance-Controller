@@ -74,38 +74,35 @@ def render_reconciliation():
     
     # Pagination controls
     st.markdown("### Pagination")
-    pcol1, pcol2, pcol3, pcol4 = st.columns([1, 2, 2, 1])
-    
+    pcol1, pcol2, pcol3, pcol4, pcol5 = st.columns([1.5, 1, 1.5, 1, 1])
+
     with pcol1:
-        st.write(f"**Total:** {total} matches")
-    
+        st.caption(f"**Total:** {total} matches")
+
     with pcol2:
         if st.button("← Previous", disabled=(page <= 1), use_container_width=True):
             st.session_state['match_page'] = max(1, page - 1)
             st.rerun()
-    
+
     with pcol3:
-        # Page selector
-        page_options = list(range(1, total_pages + 1))
-        if page_options:
-            selected_page = st.selectbox(
-                f"Page (of {total_pages})",
-                options=page_options,
-                index=page - 1 if page <= total_pages else 0,
-                key="match_page_selector"
-            )
-            if selected_page != page:
-                st.session_state['match_page'] = selected_page
-                st.rerun()
-    
+        page_options = list(range(1, total_pages + 1)) if total_pages > 0 else [1]
+        selected_page = st.selectbox(
+            "Page",
+            options=page_options,
+            index=page - 1 if page in page_options else 0,
+            label_visibility="collapsed",
+            key="match_page_selector"
+        )
+        if selected_page != page:
+            st.session_state['match_page'] = selected_page
+            st.rerun()
+
     with pcol4:
         if st.button("Next →", disabled=(page >= total_pages), use_container_width=True):
             st.session_state['match_page'] = min(total_pages, page + 1)
             st.rerun()
-    
-    # Page size selector
-    ps_col1, ps_col2 = st.columns([1, 3])
-    with ps_col1:
+
+    with pcol5:
         page_size = st.selectbox(
             "Per page",
             options=[50, 100, 200, 500],

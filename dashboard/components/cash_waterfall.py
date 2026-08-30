@@ -113,7 +113,7 @@ def render_cash_position_breakdown(
                 border-radius: 4px;
             ">
                 <span style="color: #E6EDF3;">{label}</span>
-                <span style="color: {color}; font-weight: 600; font-family: 'JetBrains Mono', monospace;">₹{format_inr(float(value))}</span>
+                <span style="color: {color}; font-weight: 600; font-family: 'JetBrains Mono', monospace;">{format_inr(float(value))}</span>
             </div>
             ''', unsafe_allow_html=True)
     
@@ -134,15 +134,15 @@ def render_cash_position_breakdown(
         ">
             <div style="margin-bottom: 1rem;">
                 <div style="color: #8B949E; font-size: 0.875rem; margin-bottom: 0.5rem;">Expected Cash</div>
-                <div style="color: #58A6FF; font-size: 1.5rem; font-weight: 700; font-family: 'JetBrains Mono', monospace;">₹{format_inr(float(expected_cash))}</div>
+                <div style="color: #58A6FF; font-size: 1.5rem; font-weight: 700; font-family: 'JetBrains Mono', monospace;">{format_inr(float(expected_cash))}</div>
             </div>
             <div style="margin-bottom: 1rem;">
                 <div style="color: #8B949E; font-size: 0.875rem; margin-bottom: 0.5rem;">Bank Cash</div>
-                <div style="color: #B3B1AD; font-size: 1.5rem; font-weight: 700; font-family: 'JetBrains Mono', monospace;">₹{format_inr(float(bank_cash))}</div>
+                <div style="color: #B3B1AD; font-size: 1.5rem; font-weight: 700; font-family: 'JetBrains Mono', monospace;">{format_inr(float(bank_cash))}</div>
             </div>
             <div style="padding-top: 1rem; border-top: 1px solid #2D333B;">
                 <div style="color: #8B949E; font-size: 0.875rem; margin-bottom: 0.5rem;">Variance</div>
-                <div style="color: {variance_color}; font-size: 1.5rem; font-weight: 700; font-family: 'JetBrains Mono', monospace;">₹{format_inr(float(variance))}</div>
+                <div style="color: {variance_color}; font-size: 1.5rem; font-weight: 700; font-family: 'JetBrains Mono', monospace;">{format_inr(float(variance))}</div>
             </div>
         </div>
         ''', unsafe_allow_html=True)

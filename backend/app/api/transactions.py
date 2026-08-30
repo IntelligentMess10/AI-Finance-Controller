@@ -413,7 +413,18 @@ async def calculate_cash_position(db: AsyncSession = Depends(get_db)):
     """Calculate and store a fresh cash position."""
     settings = get_settings()
     cash_engine = CashEngine(settings.app.opening_cash)
-    position = await cash_engine.calculate_position(db)
+    
+    # Get latest position to preserve adjustments
+    from backend.app.db.models import CashPosition
+    from sqlalchemy import select
+    result = await db.execute(
+        select(CashPosition).order_by(CashPosition.date.desc()).limit(1)
+    )
+    latest_position = result.scalar_one_or_none()
+    
+    existing_adjustments = latest_position.adjustments if latest_position else Decimal("0")
+    
+    position = await cash_engine.calculate_position(db, adjustments=existing_adjustments)
     db.add(position)
     await db.commit()
     await db.refresh(position)

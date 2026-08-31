@@ -23,6 +23,7 @@ def render_exceptions():
         if st.button("← Back to Exception Queue", type="secondary"):
             st.session_state['investigation_result'] = None
             st.session_state['investigate_exc_id'] = None
+            st.session_state['investigation_chat'] = []  # Clear chat on back
             st.rerun()
         return
     
@@ -41,6 +42,8 @@ def render_exceptions():
     
     # Callback that calls API AND stores result
     def handle_investigate(exc_id):
+        # Clear previous chat when starting new investigation
+        st.session_state['investigation_chat'] = []
         with spinner_container.spinner("Running AI investigation..."):  # Spinner shows at top
             resolution = api_post(f"/exceptions/{exc_id}/investigate")
         if resolution:

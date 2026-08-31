@@ -157,6 +157,8 @@ class OllamaProvider(LLMProvider):
 
 class GroqProvider(LLMProvider):
     def __init__(self, api_key: str, model: str = "openai/gpt-oss-20b", timeout: int = 30):
+        import logging
+        logging.info(f"GroqProvider init: api_key={'***' if api_key else 'EMPTY'}, model={model}")
         self.api_key = api_key
         self.model = model
         self.client = httpx.AsyncClient(
@@ -172,6 +174,8 @@ class GroqProvider(LLMProvider):
         tool_choice: Optional[str] = None,
         response_format: Optional[Dict[str, Any]] = None,
     ) -> LLMResponse:
+        import logging
+        logging.info(f"GroqProvider.complete called with {len(messages)} messages")
         payload = {
             "model": self.model,
             "messages": serialize_messages(messages),
@@ -184,19 +188,25 @@ class GroqProvider(LLMProvider):
         
         if response_format and response_format.get("type") == "json_object":
             payload["response_format"] = {"type": "json_object"}
-
-        response = await self.client.post("/chat/completions", json=payload)
-        if response.is_error:
-            raise RuntimeError(
-                f"Groq API error ({response.status_code}): {response.text}"
-            )
-        data = response.json()
         
-        choice = data["choices"][0]
-        content = choice["message"].get("content", "")
-        tool_calls = normalize_tool_calls(choice["message"].get("tool_calls"))
-        
-        return LLMResponse(content=content, tool_calls=tool_calls, usage=data.get("usage"))
+        try:
+            response = await self.client.post("/chat/completions", json=payload)
+            logging.info(f"Groq response status: {response.status_code}")
+            if response.is_error:
+                logging.error(f"Groq API error ({response.status_code}): {response.text}")
+                raise RuntimeError(
+                    f"Groq API error ({response.status_code}): {response.text}"
+                )
+            data = response.json()
+            
+            choice = data["choices"][0]
+            content = choice["message"].get("content", "")
+            tool_calls = normalize_tool_calls(choice["message"].get("tool_calls"))
+            
+            return LLMResponse(content=content, tool_calls=tool_calls, usage=data.get("usage"))
+        except Exception as e:
+            logging.error(f"GroqProvider.complete error: {type(e).__name__}: {e}")
+            raise
 
     async def close(self):
         await self.client.aclose()

@@ -287,10 +287,19 @@ def render_exception_list(exceptions: list) -> None:
 
 
 def render_exception_investigation_result(resolution: dict) -> None:
-    """Render AI investigation result."""
+    """Render AI investigation result with follow-up chat."""
     from dashboard.styles.theme import STATUS_COLORS, get_status_color
     from dashboard.components.status_badge import render_status_badge_inline
+    from dashboard.utils.api_client import api_post
     
+    # Get exception ID from session state
+    exc_id = st.session_state.get('investigate_exc_id')
+    
+    # Initialize chat history
+    if 'investigation_chat' not in st.session_state:
+        st.session_state['investigation_chat'] = []
+    
+    # Render investigation result
     st.markdown(f'''
     <div style="
         background: linear-gradient(135deg, #1E2329 0%, #252A32 100%);
@@ -331,6 +340,46 @@ def render_exception_investigation_result(resolution: dict) -> None:
             </div>
         </div>
     ''', unsafe_allow_html=True)
+    
+    # Follow-up chat section
+    st.markdown("---")
+    st.markdown("### Follow-up Questions")
+    
+    # Display chat history
+    chat_container = st.container()
+    with chat_container:
+        for msg in st.session_state['investigation_chat']:
+            with st.chat_message(msg['role']):
+                st.write(msg['content'])
+    
+    # Chat input
+    if prompt := st.chat_input("Ask follow up...", key="followup_chat_input"):
+        # Add user message to history
+        st.session_state['investigation_chat'].append({"role": "user", "content": prompt})
+        
+        # Prepare chat history for API (last 5 messages excluding current)
+        chat_history = st.session_state['investigation_chat'][-6:-1] if len(st.session_state['investigation_chat']) > 1 else []
+        
+        # Call follow-up API
+        with st.spinner("Thinking..."):
+            import logging
+            logging.info(f"Sending follow-up request for exc_id={exc_id}, question={prompt[:50]}")
+            response = api_post(
+                f"/exceptions/{exc_id}/followup",
+                json_data={
+                    "question": prompt,
+                    "investigation_result": resolution,
+                    "chat_history": chat_history
+                }
+            )
+            logging.info(f"Follow-up response: {response}")
+        
+        if response and response.get('answer'):
+            st.session_state['investigation_chat'].append({"role": "assistant", "content": response['answer']})
+            st.rerun()
+        else:
+            st.session_state['investigation_chat'].append({"role": "assistant", "content": f"Sorry, I couldn't process that question. Response: {response}. Please try again."})
+            st.rerun()
 
 
 # def render_exception_queue(exceptions: list, on_investigate=None) -> None:

@@ -395,7 +395,63 @@ async def investigate_exception(exc_id: int, db: AsyncSession = Depends(get_db))
         # Auto-escalate on any error
         await ai_investigator.close()
         raise HTTPException(500, f"Investigation failed: {str(e)}")
+
+
+@router_exceptions.post("/{exc_id}/followup", response_model=dict)
+async def follow_up_exception(
+    exc_id: int,
+    request: dict,
+    db: AsyncSession = Depends(get_db)
+):
+    """Follow-up questions after investigation."""
+    # Validate exception exists
+    result = await db.execute(select(Exception).where(Exception.id == exc_id))
+    exc = result.scalar_one_or_none()
+    if not exc:
+        raise HTTPException(404, "Exception not found")
     
+    # Check if investigation was done (has resolution)
+    resolution_result = await db.execute(
+        select(Resolution).where(Resolution.exception_id == exc_id).order_by(Resolution.created_at.desc()).limit(1)
+    )
+    resolution = resolution_result.scalar_one_or_none()
+    if not resolution:
+        raise HTTPException(400, "No investigation found for this exception")
+    
+    # Build investigation result dict
+    investigation_result = {
+        "explanation": resolution.explanation,
+        "classification": resolution.classification.value,
+        "confidence": resolution.confidence,
+        "evidence": resolution.evidence,
+        "recommended_action": resolution.recommended_action,
+    }
+    
+    # Get request data
+    question = request.get("question", "")
+    chat_history = request.get("chat_history", [])
+    investigation_result_input = request.get("investigation_result", investigation_result)
+    
+    if not question:
+        raise HTTPException(400, "Question is required")
+    
+    # Get settings and create AI investigator
+    settings = get_settings()
+    ai_investigator = AIInvestigator(settings.ai)
+    
+    try:
+        answer = await ai_investigator.follow_up(
+            investigation_result=investigation_result_input,
+            chat_history=chat_history,
+            new_question=question
+        )
+        return {"answer": answer}
+    except builtins.Exception as e:
+        import logging
+        logging.error(f"Follow-up failed for exc_id={exc_id}: {type(e).__name__}: {e}")
+        await ai_investigator.close()
+        raise HTTPException(500, f"Follow-up failed: {str(e)}")
+
 @router_exceptions.get("/", response_model=List[ExceptionRead])
 async def get_exceptions(status: str = None, skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
     query = select(Exception)

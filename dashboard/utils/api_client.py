@@ -222,7 +222,7 @@ class APIClient:
         status: str = None,
         skip: int = 0,
         limit: int = 100,
-    ) -> Optional[List]:
+) -> Optional[List]:
         params = {"skip": 0, "limit": 100}
         if status:
             params["status"] = status
@@ -230,6 +230,22 @@ class APIClient:
     
     def investigate_exception(self, exc_id: int) -> Optional[dict]:
         return self.post(f"/exceptions/{exc_id}/investigate")
+    
+    def follow_up_exception(
+        self,
+        exc_id: int,
+        question: str,
+        investigation_result: dict,
+        chat_history: list
+    ) -> Optional[dict]:
+        return self.post(
+            f"/exceptions/{exc_id}/followup",
+            json_data={
+                "question": question,
+                "investigation_result": investigation_result,
+                "chat_history": chat_history
+            }
+        )
     
     def get_cash_position(self, date: str = None) -> Optional[dict]:
         params = {"date": date} if date else None

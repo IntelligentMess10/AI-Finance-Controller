@@ -3,7 +3,6 @@ from decimal import Decimal
 from datetime import date
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from backend.app.api import transactions
 from backend.app.db.models import CanonicalTransaction, Exception, Resolution, ResolutionStatus, ExceptionType, AuditLog, AuditAction, TransactionSource
 from backend.app.schemas.canonical import AIResolution
 from backend.app.services.llm_providers import LLMProvider, get_provider, LLMMessage
@@ -462,6 +461,60 @@ Determine the root cause and classify the exception.
         duplicates = result.scalars().all()
         return len(duplicates) > 0
     
+    async def _log_audit(self, db: AsyncSession, action: AuditAction, entity_id: int, reason: str):
+        log = AuditLog(actor="ai_investigator", entity="exception", entity_id=entity_id, action=action, reason=reason)
+        db.add(log)
+        await db.commit()
+
+    async def follow_up(
+        self,
+        investigation_result: dict,
+        chat_history: list,
+        new_question: str
+    ) -> str:
+        """Generate follow-up response given investigation context and chat history."""
+        # Build system prompt for follow-up
+        system_prompt = """You are an AI Finance Investigator continuing a conversation about a financial reconciliation exception.
+        
+The user has already received an investigation result and is now asking follow-up questions.
+Use the investigation result and chat history as context to answer follow-up questions.
+
+Guidelines:
+- Be concise and specific
+- Reference the original investigation when relevant
+- Do not re-investigate or fabricate new evidence
+        - If asked about something outside the investigation scope, politely clarify
+        - Maintain the same professional tone as the original investigation"""
+
+        # Build messages
+        confidence = investigation_result.get('confidence', 0)
+        if isinstance(confidence, str):
+            try:
+                confidence = float(confidence)
+            except ValueError:
+                confidence = 0.0
+        
+        messages = [
+            LLMMessage(role="system", content=system_prompt),
+            LLMMessage(role="user", content=f"Investigation Result:\n{investigation_result.get('explanation', '')}\n\nClassification: {investigation_result.get('classification', '')}\nConfidence: {confidence:.0%}\nEvidence: {', '.join(investigation_result.get('evidence', []))}\nRecommended Action: {investigation_result.get('recommended_action', 'N/A')}"),
+        ]
+
+        # Add chat history (last 5 messages)
+        for msg in chat_history[-5:]:
+            messages.append(LLMMessage(role=msg['role'], content=msg['content']))
+
+        # Add new question
+        messages.append(LLMMessage(role="user", content=new_question))
+
+        # Get response from provider
+        try:
+            response = await self.provider.complete(messages)
+            return response.content
+        except Exception as e:
+            import logging
+            logging.error(f"Follow-up provider error: {type(e).__name__}: {e}")
+            raise
+
     async def _log_audit(self, db: AsyncSession, action: AuditAction, entity_id: int, reason: str):
         log = AuditLog(actor="ai_investigator", entity="exception", entity_id=entity_id, action=action, reason=reason)
         db.add(log)

@@ -515,6 +515,108 @@ Guidelines:
             logging.error(f"Follow-up provider error: {type(e).__name__}: {e}")
             raise
 
+    async def investigate_probable_match(
+        self,
+        db: AsyncSession,
+        match,
+        canonical_txn,
+        matched_txn
+    ) -> dict:
+        """
+        Investigate a probable match (score 0.70-0.89) to determine if it should be confirmed as a match.
+        
+        Args:
+            db: Database session
+            match: The Match object with PROBABLE_MATCH status
+            canonical_txn: The first canonical transaction
+            matched_txn: The second canonical transaction (the match)
+            
+        Returns:
+            dict with keys: confidence, classification, explanation, evidence, recommended_action
+        """
+        # Build system prompt for probable match investigation
+        system_prompt = """You are an AI Finance Investigator evaluating a probable match between two transactions.
+        
+A probable match has been identified with a score between 0.70 and 0.89. This indicates a potential match 
+that needs further investigation before it can be confirmed as a true match.
+
+Your task is to evaluate the evidence and determine if this probable match should be confirmed as a true match.
+
+GUIDELINES:
+- Evaluate the evidence carefully: amounts, dates, counterparties, references, and any other relevant details
+- Consider the match score (0.70-0.89 range) and what it implies about match quality
+- Look for specific evidence supporting or refuting the match
+- Be precise and evidence-based in your assessment
+- If evidence is insufficient, indicate that the match should be escalated for manual review
+- Do not fabricate evidence; only use what is provided
+- If the evidence strongly supports a match, recommend confirmation with high confidence
+- If evidence is weak or contradictory, recommend escalation for manual review
+
+OUTPUT FORMAT (JSON):
+{
+    "confidence": 0.0-1.0,
+    "classification": "confirmed_match" | "no_match" | "insufficient_evidence",
+    "explanation": "Detailed reasoning with specific evidence references",
+    "evidence": ["evidence item 1", "evidence item 2", ...],
+    "recommended_action": "confirm_match" | "escalate" | "reject"
+}"""
+
+        # Build the investigation context
+        messages = [
+            LLMMessage(role="system", content=system_prompt),
+            LLMMessage(role="user", content=f"""
+Probable Match Investigation:
+- Match ID: {match.id}
+- Match Score: {match.score:.2f}
+- Match Method: {match.method}
+- Match Evidence: {', '.join(match.evidence) if match.evidence else 'None'}
+
+Transaction A (Canonical):
+- ID: {canonical_txn.id}
+- Counterparty: {canonical_txn.counterparty}
+- Amount: {canonical_txn.amount} {canonical_txn.currency}
+- Date: {canonical_txn.date}
+- Direction: {canonical_txn.direction}
+- Reference: {canonical_txn.reference or 'None'}
+- Description: {canonical_txn.description or 'None'}
+
+Transaction B (Matched):
+- ID: {matched_txn.id}
+- Counterparty: {matched_txn.counterparty}
+- Amount: {matched_txn.amount} {matched_txn.currency}
+- Date: {matched_txn.date}
+- Direction: {matched_txn.direction}
+- Reference: {matched_txn.reference or 'None'}
+- Description: {matched_txn.description or 'None'}
+
+Evaluate this probable match and determine if it should be confirmed as a true match.
+Return your assessment in the specified JSON format.
+""")
+        ]
+        
+        # Get response from provider
+        try:
+            response = await self.provider.complete(
+                messages,
+                response_format={"type": "json_object"},
+            )
+            
+            import json
+            result = json.loads(response.content)
+            
+            # Validate response structure
+            required_keys = ["confidence", "classification", "explanation", "evidence", "recommended_action"]
+            for key in required_keys:
+                if key not in result:
+                    raise ValueError(f"Missing required key in AI response: {key}")
+            
+            return result
+            
+        except Exception as e:
+            import logging
+            logging.error(f"Probable match investigation error: {type(e).__name__}: {e}")
+            raise
+
     async def _log_audit(self, db: AsyncSession, action: AuditAction, entity_id: int, reason: str):
         log = AuditLog(actor="ai_investigator", entity="exception", entity_id=entity_id, action=action, reason=reason)
         db.add(log)

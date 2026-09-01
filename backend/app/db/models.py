@@ -26,6 +26,8 @@ class MatchStatus(str, enum.Enum):
     EXCEPTION = "exception"
     DUPLICATE = "duplicate"
     MISSING_COUNTERPARTY = "missing_counterparty"
+    ESCALATED = "escalated"
+    RESOLVED = "resolved"
 
 
 class ExceptionType(str, enum.Enum):
@@ -132,6 +134,11 @@ class Match(Base):
     status: Mapped[MatchStatus] = mapped_column(Enum(MatchStatus), nullable=False)
     evidence: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    
+    # Resolution tracking fields
+    resolution_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("resolutions.id"), nullable=True)
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    resolution_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     canonical: Mapped["CanonicalTransaction"] = relationship(foreign_keys=[canonical_transaction_id], back_populates="matches")
     matched: Mapped["CanonicalTransaction"] = relationship(foreign_keys=[matched_transaction_id], back_populates="matched_matches")

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import List, Dict, Any
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 import time
 import builtins
@@ -245,6 +245,158 @@ async def run_reconciliation(request: dict, db: AsyncSession = Depends(get_db)):
         "cash_position": cash_position.model_dump() if cash_position else None,
         "forecast_summary": forecast_summary
     }
+
+
+@router_reconciliation.post("/auto-resolve-probable", response_model=dict)
+async def auto_resolve_probable_matches(db: AsyncSession = Depends(get_db)):
+    """Auto-resolve all probable matches using AI investigation."""
+    from backend.app.services.ai_investigator import AIInvestigator
+    from backend.app.config import get_settings
+    from backend.app.db.models import Match, MatchStatus, Resolution, ResolutionStatus
+    from sqlalchemy import select
+    
+    settings = get_settings()
+    ai_investigator = AIInvestigator(settings.ai)
+    
+    # Get all probable matches
+    result = await db.execute(select(Match).where(Match.status == MatchStatus.PROBABLE_MATCH))
+    probable_matches = result.scalars().all()
+    
+    if not probable_matches:
+        return {
+            "total": 0,
+            "resolved": 0,
+            "escalated": 0,
+            "details": []
+        }
+    
+    results = []
+    resolved_count = 0
+    escalated_count = 0
+    
+    for match in probable_matches:
+        # Get both transactions
+        canonical_txn = await db.get(CanonicalTransaction, match.canonical_transaction_id)
+        matched_txn = await db.get(CanonicalTransaction, match.matched_transaction_id)
+        
+        if not canonical_txn or not matched_txn:
+            # Skip if transactions not found
+            escalated_count += 1
+            match.status = MatchStatus.ESCALATED
+            match.resolution_summary = "Related transactions not found"
+            match.resolved_at = datetime.utcnow()
+            continue
+        
+        try:
+            ai = AIInvestigator(settings.ai)
+            result = await ai.investigate_probable_match(db, match, match.canonical, match.matched)
+            
+            confidence = result.get("confidence", 0)
+            classification = result.get("classification", "insufficient_evidence")
+            explanation = result.get("explanation", "")
+            evidence = result.get("evidence", [])
+            recommended_action = result.get("recommended_action", "escalate")
+            
+            match.resolution_summary = explanation
+            match.resolved_at = datetime.utcnow()
+            
+            if confidence >= settings.ai.confidence_auto_resolve and classification == "confirmed_match":
+                # Auto-resolve as MATCHED
+                match.status = MatchStatus.MATCHED
+                resolved_count += 1
+                match.resolution_summary = f"Auto-resolved: {explanation}"
+            else:
+                # Mark as escalated for manual review
+                match.status = MatchStatus.ESCALATED
+                escalated_count += 1
+                match.resolution_summary = f"Escalated: {explanation} (confidence: {confidence:.0%})"
+            
+            # Store resolution details
+            match.resolution_summary = f"AI Assessment: {explanation} | Action: {recommended_action} | Confidence: {confidence:.0%}"
+            match.resolved_at = datetime.utcnow()
+            
+        except Exception as e:
+            import logging
+            logging.error(f"Probable match {match.id} investigation failed: {e}")
+            match.status = MatchStatus.ESCALATED
+            match.resolution_summary = f"Investigation failed: {str(e)}"
+            match.resolved_at = datetime.utcnow()
+            escalated_count += 1
+    
+    await db.commit()
+    
+    return {
+        "total": len(probable_matches),
+        "resolved": resolved_count,
+        "escalated": escalated_count,
+        "details": [
+            {
+                "match_id": m.id,
+                "score": float(m.score),
+                "status": m.status.value,
+                "canonical_txn_id": m.canonical_transaction_id,
+                "matched_txn_id": m.matched_transaction_id
+            }
+            for m in probable_matches
+        ]
+    }
+
+
+@router_reconciliation.get("/probable-matches", response_model=PaginatedMatchResponse)
+async def get_probable_matches(
+    page: int = 1,
+    limit: int = 50,
+    status: str = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get paginated probable matches with optional status filter."""
+    from sqlalchemy import func
+    
+    query = select(Match).where(Match.status.in_([MatchStatus.PROBABLE_MATCH, MatchStatus.ESCALATED, MatchStatus.RESOLVED]))
+    
+    if status:
+        # Convert string status to MatchStatus enum
+        try:
+            status_enum = MatchStatus(status)
+            query = query.where(Match.status == status_enum)
+        except ValueError:
+            # Invalid status value, ignore filter
+            pass
+    
+    # Get total count
+    count_query = select(func.count(Match.id)).where(Match.status.in_([MatchStatus.PROBABLE_MATCH, MatchStatus.ESCALATED, MatchStatus.RESOLVED]))
+    count_result = await db.execute(count_query)
+    total = count_result.scalar()
+    
+    # Apply pagination
+    query = query.offset((page - 1) * limit).limit(limit)
+    result = await db.execute(query)
+    items = result.scalars().all()
+    
+    # Convert to ReconciliationItem format
+    items = []
+    for m in items:
+        items.append(ReconciliationItem(
+            id=m.id,
+            type="probable_match",
+            status=m.status.value,
+            canonical_transaction_id=m.canonical_transaction_id,
+            matched_transaction_id=m.matched_transaction_id,
+            score=float(m.score) if m.score else None,
+            method=m.method,
+            exception_type=None,
+            severity=None,
+            description=None,
+            evidence=m.evidence,
+            created_at=m.created_at
+        ))
+    
+    return PaginatedMatchResponse(
+        items=items,
+        total=total,
+        page=page,
+        limit=limit
+    )
 
 
 @router_reconciliation.get("/results", response_model=List[MatchRead])

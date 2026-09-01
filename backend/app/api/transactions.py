@@ -94,13 +94,11 @@ async def list_canonical(skip: int = 0, limit: int = 100, db: AsyncSession = Dep
 
 router_reconciliation = APIRouter(prefix="/reconciliation", tags=["reconciliation"])
 
-# Separate router for exceptions without /reconciliation prefix
 router_exceptions = APIRouter(prefix="/exceptions", tags=["exceptions"])
 
 
 @router_reconciliation.post("/run", response_model=None)
 async def run_reconciliation(request: dict, db: AsyncSession = Depends(get_db)):
-    """Run full reconciliation pipeline."""
     import time
     from backend.app.services.matching import ReconciliationEngine
     from backend.app.services.ai_investigator import AIInvestigator
@@ -116,7 +114,7 @@ async def run_reconciliation(request: dict, db: AsyncSession = Depends(get_db)):
     ai = AIInvestigator(settings.ai)
     cash = CashEngine(settings.app.opening_cash)
     
-    # 1. Get all canonical transactions
+    # Get all canonical transactions
     from sqlalchemy import select
     from backend.app.db.models import CanonicalTransaction
     result = await db.execute(select(CanonicalTransaction))
@@ -164,7 +162,6 @@ async def run_reconciliation(request: dict, db: AsyncSession = Depends(get_db)):
                 exc_obj.status = resolution.status
                 await db.commit()
         except builtins.Exception as e:
-            # Auto-escalate on any error
             await ai_investigator.close()
             raise HTTPException(500, f"Investigation failed: {str(e)}")
     
@@ -261,7 +258,6 @@ async def get_matches_paginated(
         query = query.where(Match.method == method)
     if min_score is not None:
         query = query.where(Match.score >= min_score)
-    # Get total count
     from sqlalchemy import func
     count_query = select(func.count(Match.id))
     if status:
@@ -297,7 +293,6 @@ async def get_exceptions(status: str = None, skip: int = 0, limit: int = 100, db
 
 @router_reconciliation.post("/exceptions/{exc_id}/investigate", response_model=dict)
 async def investigate_exception_reconciliation(exc_id: int, db: AsyncSession = Depends(get_db)):
-    """Investigate an exception using AI investigator (under /reconciliation prefix)."""
     settings = get_settings()
     ai_investigator = AIInvestigator(settings.ai)
     
@@ -339,12 +334,10 @@ async def investigate_exception_reconciliation(exc_id: int, db: AsyncSession = D
             "recommended_action": resolution.recommended_action,
         }
     except builtins.Exception as e:
-        # Auto-escalate on any error
         await ai_investigator.close()
         raise HTTPException(500, f"Investigation failed: {str(e)}")
 
 
-# Separate router for exceptions without /reconciliation prefix
 router_exceptions = APIRouter(prefix="/exceptions", tags=["exceptions"])
 
 
@@ -392,7 +385,6 @@ async def investigate_exception(exc_id: int, db: AsyncSession = Depends(get_db))
             "recommended_action": resolution.recommended_action,
         }
     except builtins.Exception as e:
-        # Auto-escalate on any error
         await ai_investigator.close()
         raise HTTPException(500, f"Investigation failed: {str(e)}")
 
@@ -410,7 +402,7 @@ async def follow_up_exception(
     if not exc:
         raise HTTPException(404, "Exception not found")
     
-    # Check if investigation was done (has resolution)
+    # Check if investigation was done
     resolution_result = await db.execute(
         select(Resolution).where(Resolution.exception_id == exc_id).order_by(Resolution.created_at.desc()).limit(1)
     )
@@ -449,8 +441,9 @@ async def follow_up_exception(
     except builtins.Exception as e:
         import logging
         logging.error(f"Follow-up failed for exc_id={exc_id}: {type(e).__name__}: {e}")
-        await ai_investigator.close()
         raise HTTPException(500, f"Follow-up failed: {str(e)}")
+    finally:
+        await ai_investigator.close()
 
 @router_exceptions.get("/", response_model=List[ExceptionRead])
 async def get_exceptions(status: str = None, skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
@@ -507,7 +500,6 @@ async def calculate_cash_position(db: AsyncSession = Depends(get_db)):
 
 @router_cash.get("/variance", response_model=Dict[str, Any])
 async def get_cash_variance(db: AsyncSession = Depends(get_db)):
-    """Get detailed variance breakdown for the latest cash position."""
     result = await db.execute(
         select(CashPosition).order_by(CashPosition.date.desc()).limit(1)
     )
@@ -548,7 +540,6 @@ async def get_forecast(days: int = 30, db: AsyncSession = Depends(get_db)):
 
 @router_cash.get("/forecast/summary")
 async def get_forecast_summary(days: int = 30, db: AsyncSession = Depends(get_db)):
-    """Get forecast summary grouped by horizon."""
     from backend.app.services.cash_engine import CashEngine
     from backend.app.config import get_settings
     
@@ -579,7 +570,6 @@ async def add_cash_adjustment(
     note: str,
     db: AsyncSession = Depends(get_db)
 ):
-    """Add a manual cash adjustment (e.g., bank fees, interest, corrections)."""
     result = await db.execute(
         select(CashPosition).order_by(CashPosition.date.desc()).limit(1)
     )

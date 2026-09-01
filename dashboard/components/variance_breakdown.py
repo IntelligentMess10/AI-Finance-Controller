@@ -1,7 +1,3 @@
-"""
-Variance Breakdown Component - Detailed variance analysis with drill-down.
-"""
-
 import streamlit as st
 from typing import Optional, Dict, Any
 from dashboard.utils.formatters import format_inr

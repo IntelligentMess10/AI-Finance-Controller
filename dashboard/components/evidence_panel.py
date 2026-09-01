@@ -1,7 +1,3 @@
-"""
-Evidence Panel Component - Side-by-side Bank | Ledger | Processor evidence view.
-"""
-
 import streamlit as st
 from typing import Dict, Any, Optional, List
 from dashboard.utils.formatters import format_inr, format_date

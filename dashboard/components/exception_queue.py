@@ -1,7 +1,3 @@
-"""
-Exception Queue Component - Tabbed queue with investigate actions.
-"""
-
 import streamlit as st
 import pandas as pd
 from typing import List, Optional, Dict, Any, Callable
@@ -358,7 +354,7 @@ def render_exception_investigation_result(resolution: dict) -> None:
         st.session_state['investigation_chat'].append({"role": "user", "content": prompt})
         
         # Prepare chat history for API (last 5 messages excluding current)
-        chat_history = st.session_state['investigation_chat'][-6:-1] if len(st.session_state['investigation_chat']) > 1 else []
+        chat_history = st.session_state['investigation_chat'][-5:] if len(st.session_state['investigation_chat']) > 1 else []
         
         # Call follow-up API
         with st.spinner("Thinking..."):

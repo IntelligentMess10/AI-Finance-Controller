@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
 import httpx
 import json
+import asyncio
 
 
 class ToolCall(BaseModel):
@@ -31,7 +32,6 @@ class LLMResponse(BaseModel):
 
 
 def normalize_tool_calls(raw_tool_calls: Optional[List[Dict[str, Any]]]) -> Optional[List[ToolCall]]:
-    """Normalize OpenAI-compatible tool calls to the provider-neutral model."""
     if not raw_tool_calls:
         return None
 
@@ -175,6 +175,8 @@ class GroqProvider(LLMProvider):
         response_format: Optional[Dict[str, Any]] = None,
     ) -> LLMResponse:
         import logging
+        import asyncio
+        
         logging.info(f"GroqProvider.complete called with {len(messages)} messages")
         payload = {
             "model": self.model,
@@ -189,24 +191,41 @@ class GroqProvider(LLMProvider):
         if response_format and response_format.get("type") == "json_object":
             payload["response_format"] = {"type": "json_object"}
         
-        try:
-            response = await self.client.post("/chat/completions", json=payload)
-            logging.info(f"Groq response status: {response.status_code}")
-            if response.is_error:
-                logging.error(f"Groq API error ({response.status_code}): {response.text}")
-                raise RuntimeError(
-                    f"Groq API error ({response.status_code}): {response.text}"
-                )
-            data = response.json()
-            
-            choice = data["choices"][0]
-            content = choice["message"].get("content", "")
-            tool_calls = normalize_tool_calls(choice["message"].get("tool_calls"))
-            
-            return LLMResponse(content=content, tool_calls=tool_calls, usage=data.get("usage"))
-        except Exception as e:
-            logging.error(f"GroqProvider.complete error: {type(e).__name__}: {e}")
-            raise
+        max_retries = 3
+        base_delay = 1.0
+        
+        for attempt in range(max_retries):
+            try:
+                response = await self.client.post("/chat/completions", json=payload)
+                logging.info(f"Groq response status: {response.status_code}")
+                if response.is_error:
+                    logging.error(f"Groq API error ({response.status_code}): {response.text}")
+                    if response.status_code >= 500 or response.status_code == 429:
+                        # Retry on server errors or rate limiting
+                        if attempt < max_retries - 1:
+                            delay = base_delay * (2 ** attempt)
+                            logging.warning(f"Retrying in {delay}s (attempt {attempt + 1}/{max_retries})")
+                            await asyncio.sleep(delay)
+                            continue
+                    raise RuntimeError(
+                        f"Groq API error ({response.status_code}): {response.text}"
+                    )
+                data = response.json()
+                
+                choice = data["choices"][0]
+                content = choice["message"].get("content", "")
+                tool_calls = normalize_tool_calls(choice["message"].get("tool_calls"))
+                
+                return LLMResponse(content=content, tool_calls=tool_calls, usage=data.get("usage"))
+            except Exception as e:
+                logging.error(f"GroqProvider.complete error (attempt {attempt + 1}): {type(e).__name__}: {e}")
+                if attempt == max_retries - 1:
+                    raise
+                delay = base_delay * (2 ** attempt)
+                logging.warning(f"Retrying in {delay}s (attempt {attempt + 1}/{max_retries})")
+                await asyncio.sleep(delay)
+        
+        raise RuntimeError("Max retries exceeded for GroqProvider.complete")
 
     async def close(self):
         await self.client.aclose()

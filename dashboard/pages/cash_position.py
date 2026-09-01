@@ -1,7 +1,3 @@
-"""
-Cash Position Page - Cash position breakdown and forecast.
-"""
-
 import streamlit as st
 from dashboard.components.cash_waterfall import render_cash_position_breakdown
 from dashboard.components.cash_waterfall import render_cash_waterfall_card

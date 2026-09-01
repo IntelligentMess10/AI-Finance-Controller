@@ -1,7 +1,3 @@
-"""
-Exceptions Page - Tabbed exception queue with investigation actions.
-"""
-
 import streamlit as st
 import pandas as pd
 from dashboard.components.exception_queue import render_exception_queue

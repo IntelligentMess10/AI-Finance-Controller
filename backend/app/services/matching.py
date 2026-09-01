@@ -526,7 +526,6 @@ class ReconciliationEngine:
         }
 
     def _find_processor_fee(self, ledger_txn: CanonicalTransaction, bank_txn: CanonicalTransaction, transactions: List[CanonicalTransaction]) -> Optional[Decimal]:
-        """Find processor fee for a ledger-bank pair by looking for processor record."""
         # Search for processor record that matches the ledger/bank pair
         # Look for processor with same counterparty, similar date, and amount close to ledger amount
         ledger_amount = ledger_txn.amount

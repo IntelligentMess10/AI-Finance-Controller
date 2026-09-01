@@ -18,7 +18,6 @@ def event_loop():
 @pytest.fixture(scope="session")
 async def test_engine():
     settings = get_settings()
-    # Override for testing - use in-memory SQLite or test PostgreSQL
     test_db_url = "sqlite+aiosqlite:///:memory:"
     
     engine = create_async_engine(test_db_url, echo=False)

@@ -1,7 +1,3 @@
-"""
-Probable Matches Page - Dedicated page for probable matches with auto-resolve functionality.
-"""
-
 import streamlit as st
 from datetime import datetime
 from dashboard.utils.api_client import api_get, api_post

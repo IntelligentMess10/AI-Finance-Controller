@@ -125,5 +125,5 @@ def render_probable_match_queue(df):
 
 if __name__ == "__main__":
     import streamlit as st
-    from dashboard.pages.probable_matches import render_probable_matches
+    from dashboard.pages.Probable_Matches import render_probable_matches
     render_probable_matches()

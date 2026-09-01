@@ -21,7 +21,7 @@ Built on the principle that **code handles the accounting** (deterministic, audi
 │                          NORMALIZATION & CANONICAL LAYER                                │
 │  ┌───────────────────────────────────────────────────────────────────────────────────┐  │
 │  │  Counterparty Fuzzy Matching  │  Date/Amount Normalization  │  Reference Parsing  │  │
-│  │  Currency Conversion          │  Direction Inference        │  Metadata Preservation │  │
+│     Currency Conversion          │  Direction Inference        │  Metadata Preservation │  
 │  └───────────────────────────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
                                     │
@@ -34,7 +34,7 @@ Built on the principle that **code handles the accounting** (deterministic, audi
 │  │  Score: 1.0      │  │  Score: 0.85+    │  │  Rounding)       │  │  (0.70-0.89)   │   │
 │  │  → MATCHED       │  │  → MATCHED       │  │  → MATCHED       │  │  → PROBABLE    │   │
 │  └──────────────────┘  └──────────────────┘  └──────────────────┘  └────────────────┘   │
-│                    │                     │                      │                  |    |    │  
+│                    │                     │                      │                  |    |      
 │                    ▼                     ▼                      ▼                  ▼    │ 
 │           ┌─────────────────────────────────────────────────────────────────────────┐   │
 │           │              UNMATCHED → EXCEPTION QUEUE (< 0.70)                       │   │

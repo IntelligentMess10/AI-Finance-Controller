@@ -280,3 +280,20 @@ class MetricsResponse(BaseModel):
     cash_variance: Decimal
     ai_resolution_rate: float
     ai_accuracy: float
+
+
+class AutoResolveProbableResponse(BaseModel):
+    total: int
+    resolved: int
+    escalated: int
+    details: List[dict]
+
+
+class ProbableMatchResolutionDetail(BaseModel):
+    match_id: int
+    canonical_txn_id: int
+    matched_txn_id: int
+    score: float
+    status: str
+    confidence: float
+    classification: str

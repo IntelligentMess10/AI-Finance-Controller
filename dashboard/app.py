@@ -1,10 +1,10 @@
 import streamlit as st
-
 from dashboard.pages.Overview import render_overview
 from dashboard.pages.Reconciliation import render_reconciliation
 from dashboard.pages.Exceptions import render_exceptions
 from dashboard.pages.Cash_Position import render_cash_position
 from dashboard.pages.Metrics import render_metrics
+from dashboard.pages.probable_matches import render_probable_matches
 from dashboard.styles.css import inject_css
 from dashboard.utils.state import init_session_state
 
@@ -30,8 +30,8 @@ def main():
     </div>
     """, unsafe_allow_html=True)
     
-    tab_overview, tab_reconciliation, tab_exceptions, tab_cash, tab_metrics = st.tabs([
-        "📊 Overview", "🔍 Reconciliation", "⚠️ Exceptions", "💵 Cash Position", "📈 Metrics"
+    tab_overview, tab_reconciliation, tab_probable, tab_exceptions, tab_cash, tab_metrics = st.tabs([
+        "📊 Overview", "🔍 Reconciliation", "⚠️ Probable Matches", "⚠️ Exceptions", "💵 Cash Position", "📈 Metrics"
     ])
     
     with tab_overview:
@@ -39,6 +39,9 @@ def main():
     
     with tab_reconciliation:
         render_reconciliation()
+    
+    with tab_probable:
+        render_probable_matches()
     
     with tab_exceptions:
         render_exceptions()

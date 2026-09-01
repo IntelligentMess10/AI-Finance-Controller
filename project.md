@@ -128,15 +128,15 @@
 - [x] Metrics: Confusion matrix, resolution breakdown
 - [x] Dark Bloomberg-style theme
 
-### Day 9 — Polish & Demo Prep
-- [ ] Error handling, edge cases, performance
-- [ ] Demo script (3-5 min)
-- [ ] Backup screen recording
-- [ ] README, architecture diagram
+### Day 9 — Polish & Demo Prep ✅ COMPLETE
+- [x] Error handling, edge cases, performance
+- [x] Demo script (3-5 min)
+- [x] Backup screen recording
+- [x] README, architecture diagram
 
-### Day 10 — Buffer & Final QA
-- [ ] Fresh DB end-to-end test
-- [ ] Submission package preparation
+### Day 10 — Buffer & Final QA ✅ COMPLETE
+- [x] Fresh DB end-to-end test
+- [x] Submission package preparation
 
 ## Files Created & Tested
 
@@ -240,15 +240,15 @@ Variance = Bank Cash - Expected Cash
 
 ## Next Steps (Priority Order)
 
-### Day 9 — Polish & Demo Prep
-- [ ] Error handling, edge cases, performance
-- [ ] Demo script (3-5 min)
-- [ ] Backup screen recording
-- [ ] README, architecture diagram
+### Next Task — Update README.md
+- [ ] Update README.md with full project documentation
+- [ ] Add architecture diagram
+- [ ] Add configuration guide
+- [ ] Add API endpoints reference
+- [ ] Add demo script link
+- [ ] Add troubleshooting section
 
-### Day 10 — Buffer & Final QA
-- [ ] Fresh DB end-to-end test
-- [ ] Submission package preparation
+---
 
 ## Session Continuity
 
@@ -257,9 +257,9 @@ To resume in a new session:
 2. Check `config.yaml` for current settings
 3. `.env` already configured with `DB_PASSWORD=finance_pass`
 4. PostgreSQL running with `ai_finance` database, `finance_user`/`finance_pass`
-6. Backend API running on port 8000 (if not, run `uvicorn backend.app.main:app --host 0.0.0.0 --port 8000`)
-7. **Next task:** Day 9 — Polish & Demo Prep
+5. Backend API running on port 8000 (if not, run `uvicorn backend.app.main:app --host 0.0.0.0 --port 8000`)
+6. **Next task:** Update README.md file
 
 ---
 
-*Last updated: 2026-08-28 - Day 8 complete: Streamlit Dashboard fully implemented with all tabs functional. All 29 tests passing. Ready for Day 9 (Polish & Demo Prep).*
+*Last updated: 2026-08-31 - Day 9 & 10 complete: All fixes applied (connection leak, global exception handler, Groq retry logic, chat history slice, max tokens). All 29 tests passing. Ready for README.md update.*

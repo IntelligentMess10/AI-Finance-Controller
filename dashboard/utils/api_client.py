@@ -1,8 +1,3 @@
-"""
-API Client for AI Finance Controller Dashboard.
-Centralized API client with caching, retries, and error handling.
-"""
-
 import asyncio
 import time
 from typing import Any, Dict, List, Optional, Union

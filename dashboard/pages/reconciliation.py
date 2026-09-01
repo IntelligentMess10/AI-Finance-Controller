@@ -1,10 +1,6 @@
-"""
-Reconciliation Page - View and filter reconciliation matches.
-"""
-
 import streamlit as st
 import pandas as pd
-from dashboard.utils.api_client import get_api_client
+from dashboard.utils.api_client import get_api_client, api_post
 from dashboard.utils.formatters import format_inr
 
 
@@ -17,7 +13,27 @@ def render_reconciliation():
     if 'match_page_size' not in st.session_state:
         st.session_state['match_page_size'] = 100
     
+    # Check if reconciliation should be triggered
+    if st.session_state.get('run_reconciliation'):
+        st.session_state['run_reconciliation'] = False  # Clear flag immediately
+        with st.spinner("Running reconciliation... This may take a moment."):
+            try:
+                result = api_post("/reconciliation/run", json_data={"force_rerun": True})
+                if result:
+                    st.success("Reconciliation completed successfully!")
+                else:
+                    st.error("Reconciliation failed. Please check the logs.")
+            except Exception as e:
+                st.error(f"Reconciliation failed: {str(e)}")
+            st.rerun()
+    
     st.markdown('<div class="section-header">Reconciliation Results</div>', unsafe_allow_html=True)
+    
+    # Initialize pagination state
+    if 'match_page' not in st.session_state:
+        st.session_state['match_page'] = 1
+    if 'match_page_size' not in st.session_state:
+        st.session_state['match_page_size'] = 100
     
     # Callback functions for pagination buttons (execute BEFORE rerun)
     def go_previous():
@@ -41,7 +57,6 @@ def render_reconciliation():
     st.markdown("### Filters")
     col1, col2, col3 = st.columns(3)
     
-    # We need placeholder status/method options for initial render
     # These will be updated after fetch
     if 'match_status_filter' not in st.session_state:
         st.session_state['match_status_filter'] = ['matched', 'probable_match']
@@ -49,7 +64,7 @@ def render_reconciliation():
         st.session_state['match_method_filter'] = []
     
     with col1:
-        status_options = ['matched', 'probable_match', 'exception', 'duplicate', 'missing_counterparty']
+        status_options = ['matched', 'probable_match', 'duplicate', 'missing_counterparty']
         status_filter = st.multiselect(
             "Status", 
             options=status_options, 
@@ -101,15 +116,16 @@ def render_reconciliation():
         st.info("No matches found")
         return
     
-    # Format for display
-    df['score_fmt'] = df['score'].apply(lambda x: f"{x:.2%}")
-    df['status_fmt'] = df['status'].str.replace('_', ' ').str.title()
-    df['method_fmt'] = df['method'].str.replace('_', ' ').str.title()
+    # Format for display (handle None values for exceptions)
+    df['score_fmt'] = df['score'].apply(lambda x: f"{x:.2%}" if pd.notna(x) else "—")
+    df['status_fmt'] = df['status'].apply(lambda x: x.replace('_', ' ').title() if pd.notna(x) else "—")
+    df['method_fmt'] = df['method'].apply(lambda x: x.replace('_', ' ').title() if pd.notna(x) else "—")
     
-    # Apply additional client-side filters (method, min_score) since backend only filters by status
+    # Apply additional client-side filters (method, min_score, status) since backend only filters by status
     filtered = df[
         (df['method'].isin(method_filter) if method_filter else True) &
-        (df['score'] >= min_score)
+        (df['score'] >= min_score) &
+        (df['status'].isin(status_filter) if status_filter else True)
     ]
     
     # Pagination controls

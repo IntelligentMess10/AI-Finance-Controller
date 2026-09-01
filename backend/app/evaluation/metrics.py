@@ -76,7 +76,6 @@ class EvaluationEngine:
         )
 
     async def _compute_ground_truth_metrics(self, db: AsyncSession) -> Dict[str, float]:
-        """Compute accuracy metrics against ground truth."""
         try:
             gt = pl.read_parquet(self.ground_truth_path)
         except Exception:
@@ -129,8 +128,6 @@ class EvaluationEngine:
             
             if gt1 and gt2:
                 total_decisions += 1
-                # Ground truth says these should match if they have same ground truth type
-                # and it's a clean_match or known discrepancy type
                 should_match = gt1 == gt2 and gt1 != "ambiguous"
                 
                 if m.status == MatchStatus.MATCHED:
@@ -141,7 +138,6 @@ class EvaluationEngine:
                 elif m.status == MatchStatus.PROBABLE_MATCH:
                     if should_match:
                         correct_decisions += 1
-                    # probable match on non-match is not necessarily wrong
                 elif m.status == MatchStatus.EXCEPTION:
                     if not should_match:
                         correct_decisions += 1
@@ -155,7 +151,6 @@ class EvaluationEngine:
                 ai_total += 1
                 gt_type = gt_map.get(exc.transaction_id)
                 if gt_type:
-                    # Check if AI classification matches ground truth
                     if res.classification.value == gt_type or \
                        (gt_type == "processor_fee" and res.classification.value == "processor_fee") or \
                        (gt_type == "amount_mismatch_fee" and res.classification.value == "amount_mismatch") or \

@@ -247,6 +247,25 @@ class PaginatedMatchResponse(BaseModel):
     limit: int
 
 
+class ReconciliationItem(BaseModel):
+    id: int
+    canonical_transaction_id: int
+    matched_transaction_id: int
+    score: float
+    method: str
+    status: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PaginatedReconciliationResponse(BaseModel):
+    items: List[ReconciliationItem]
+    total: int
+    page: int
+    limit: int
+
+
 class MetricsResponse(BaseModel):
     total_records: int
     matched_records: int

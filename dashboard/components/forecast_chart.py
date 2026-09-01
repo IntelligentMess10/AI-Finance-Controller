@@ -1,7 +1,3 @@
-"""
-Forecast Chart Component.
-"""
-
 import streamlit as st
 import pandas as pd
 from typing import List, Optional, Dict, Any

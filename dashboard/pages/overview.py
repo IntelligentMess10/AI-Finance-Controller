@@ -1,7 +1,3 @@
-"""
-Overview Page - Main dashboard view with KPIs and quick actions.
-"""
-
 import streamlit as st
 from dashboard.components.kpi_card import render_kpi_row_simple
 from dashboard.components.cash_waterfall import render_cash_waterfall_card

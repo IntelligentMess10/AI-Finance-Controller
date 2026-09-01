@@ -1,7 +1,3 @@
-"""
-Status badge component for displaying transaction/exception statuses.
-"""
-
 import streamlit as st
 from typing import Optional
 

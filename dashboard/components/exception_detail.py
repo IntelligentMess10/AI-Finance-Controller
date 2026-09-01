@@ -1,7 +1,3 @@
-"""
-Exception Detail Component - Detailed view for exception investigation.
-"""
-
 import streamlit as st
 from typing import Optional, Dict, Any
 from dashboard.utils.formatters import format_inr, format_pct

@@ -1,7 +1,3 @@
-"""
-CSS injection utilities for Streamlit.
-"""
-
 from dashboard.styles.theme import generate_css
 
 

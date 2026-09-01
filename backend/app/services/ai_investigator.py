@@ -272,7 +272,7 @@ Determine the root cause and classify the exception.
         Validate AI resolution against business rules and actual data.
         Returns (is_valid, error_message).
         """
-        # 1. Pydantic validation already done via AIResolution(**ai_output)
+        # 1. Pydantic validation already done via AIResolution
         
         # 2. Confidence threshold check
         if ai_resolution.confidence < self.config.confidence_auto_resolve:

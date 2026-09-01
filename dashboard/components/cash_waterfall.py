@@ -1,8 +1,4 @@
-﻿'''
-Cash Waterfall Chart Component.
-'''
-
-import streamlit as st
+﻿import streamlit as st
 from typing import Optional
 from dashboard.utils.chart_helpers import create_cash_waterfall_chart
 from dashboard.utils.formatters import format_inr

@@ -1,8 +1,3 @@
-"""
-Theme configuration for AI Finance Controller Dashboard.
-Bloomberg terminal inspired dark theme.
-"""
-
 THEME = {
     # Background colors
     "bg_primary": "#0E1117",      # Main background

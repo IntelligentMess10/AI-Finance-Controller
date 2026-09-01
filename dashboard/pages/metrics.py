@@ -1,7 +1,3 @@
-"""
-Metrics Page - Evaluation metrics with ground truth comparison.
-"""
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px

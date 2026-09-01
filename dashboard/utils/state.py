@@ -1,7 +1,3 @@
-"""
-Session state initialization for the dashboard.
-"""
-
 import streamlit as st
 
 

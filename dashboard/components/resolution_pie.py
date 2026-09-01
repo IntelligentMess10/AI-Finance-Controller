@@ -1,7 +1,3 @@
-"""
-Resolution Pie Chart Component - Exception resolution breakdown.
-"""
-
 import streamlit as st
 from typing import Optional
 from dashboard.utils.chart_helpers import create_resolution_pie_chart

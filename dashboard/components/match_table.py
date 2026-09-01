@@ -1,7 +1,3 @@
-"""
-Match Table Component - Filterable, sortable reconciliation results table.
-"""
-
 import streamlit as st
 import pandas as pd
 from typing import List, Dict, Any, Optional

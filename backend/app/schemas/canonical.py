@@ -247,6 +247,25 @@ class PaginatedMatchResponse(BaseModel):
     limit: int
 
 
+class ReconciliationItem(BaseModel):
+    id: int
+    canonical_transaction_id: int
+    matched_transaction_id: int
+    score: float
+    method: str
+    status: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PaginatedReconciliationResponse(BaseModel):
+    items: List[ReconciliationItem]
+    total: int
+    page: int
+    limit: int
+
+
 class MetricsResponse(BaseModel):
     total_records: int
     matched_records: int
@@ -261,3 +280,20 @@ class MetricsResponse(BaseModel):
     cash_variance: Decimal
     ai_resolution_rate: float
     ai_accuracy: float
+
+
+class AutoResolveProbableResponse(BaseModel):
+    total: int
+    resolved: int
+    escalated: int
+    details: List[dict]
+
+
+class ProbableMatchResolutionDetail(BaseModel):
+    match_id: int
+    canonical_txn_id: int
+    matched_txn_id: int
+    score: float
+    status: str
+    confidence: float
+    classification: str

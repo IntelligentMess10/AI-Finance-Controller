@@ -1,7 +1,3 @@
-"""
-Formatters and utilities for the dashboard.
-"""
-
 from decimal import Decimal
 from typing import Optional, Union
 from datetime import date, datetime

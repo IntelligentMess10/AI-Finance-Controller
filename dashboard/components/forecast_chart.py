@@ -1,7 +1,3 @@
-"""
-Forecast Chart Component.
-"""
-
 import streamlit as st
 import pandas as pd
 from typing import List, Optional, Dict, Any
@@ -136,8 +132,6 @@ def render_forecast_table(
             "horizon_days": "Horizon (days)",
             "frequency": "Frequency",
         },
-        hide_index=True,
-        use_container_width=True,
     )
 
 
@@ -227,8 +221,6 @@ def render_forecast_table(
             "horizon_days": "Horizon (days)",
             "frequency": "Frequency",
         },
-        hide_index=True,
-        use_container_width=True,
     )
 
 
@@ -318,8 +310,6 @@ def render_forecast_table(
             "horizon_days": "Horizon (days)",
             "frequency": "Frequency",
         },
-        hide_index=True,
-        use_container_width=True,
     )
 
 
@@ -409,8 +399,6 @@ def render_forecast_table(
             "horizon_days": "Horizon (days)",
             "frequency": "Frequency",
         },
-        hide_index=True,
-        use_container_width=True,
     )
 
 
@@ -500,8 +488,6 @@ def render_forecast_table(
             "horizon_days": "Horizon (days)",
             "frequency": "Frequency",
         },
-        hide_index=True,
-        use_container_width=True,
     )
 
 
@@ -591,8 +577,6 @@ def render_forecast_table(
             "horizon_days": "Horizon (days)",
             "frequency": "Frequency",
         },
-        hide_index=True,
-        use_container_width=True,
     )
 
 
@@ -682,8 +666,6 @@ def render_forecast_table(
             "horizon_days": "Horizon (days)",
             "frequency": "Frequency",
         },
-        hide_index=True,
-        use_container_width=True,
     )
 
 
@@ -773,8 +755,6 @@ def render_forecast_table(
             "horizon_days": "Horizon (days)",
             "frequency": "Frequency",
         },
-        hide_index=True,
-        use_container_width=True,
     )
 
 
@@ -864,8 +844,6 @@ def render_forecast_table(
             "horizon_days": "Horizon (days)",
             "frequency": "Frequency",
         },
-        hide_index=True,
-        use_container_width=True,
     )
 
 
@@ -955,8 +933,6 @@ def render_forecast_table(
             "horizon_days": "Horizon (days)",
             "frequency": "Frequency",
         },
-        hide_index=True,
-        use_container_width=True,
     )
 
 
@@ -1046,6 +1022,4 @@ def render_forecast_table(
             "horizon_days": "Horizon (days)",
             "frequency": "Frequency",
         },
-        hide_index=True,
-        use_container_width=True,
     )

@@ -1,7 +1,3 @@
-"""
-Overview Page - Main dashboard view with KPIs and quick actions.
-"""
-
 import streamlit as st
 from dashboard.components.kpi_card import render_kpi_row_simple
 from dashboard.components.cash_waterfall import render_cash_waterfall_card
@@ -58,5 +54,5 @@ def render_overview():
 
 if __name__ == "__main__":
     import streamlit as st
-    from dashboard.pages.overview import render_overview
+    from dashboard.pages.Overview import render_overview
     render_overview()

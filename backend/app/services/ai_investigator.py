@@ -3,7 +3,6 @@ from decimal import Decimal
 from datetime import date
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from backend.app.api import transactions
 from backend.app.db.models import CanonicalTransaction, Exception, Resolution, ResolutionStatus, ExceptionType, AuditLog, AuditAction, TransactionSource
 from backend.app.schemas.canonical import AIResolution
 from backend.app.services.llm_providers import LLMProvider, get_provider, LLMMessage
@@ -273,7 +272,7 @@ Determine the root cause and classify the exception.
         Validate AI resolution against business rules and actual data.
         Returns (is_valid, error_message).
         """
-        # 1. Pydantic validation already done via AIResolution(**ai_output)
+        # 1. Pydantic validation already done via AIResolution
         
         # 2. Confidence threshold check
         if ai_resolution.confidence < self.config.confidence_auto_resolve:
@@ -462,6 +461,162 @@ Determine the root cause and classify the exception.
         duplicates = result.scalars().all()
         return len(duplicates) > 0
     
+    async def _log_audit(self, db: AsyncSession, action: AuditAction, entity_id: int, reason: str):
+        log = AuditLog(actor="ai_investigator", entity="exception", entity_id=entity_id, action=action, reason=reason)
+        db.add(log)
+        await db.commit()
+
+    async def follow_up(
+        self,
+        investigation_result: dict,
+        chat_history: list,
+        new_question: str
+    ) -> str:
+        """Generate follow-up response given investigation context and chat history."""
+        # Build system prompt for follow-up
+        system_prompt = """You are an AI Finance Investigator continuing a conversation about a financial reconciliation exception.
+        
+The user has already received an investigation result and is now asking follow-up questions.
+Use the investigation result and chat history as context to answer follow-up questions.
+
+Guidelines:
+- Be concise and specific
+- Reference the original investigation when relevant
+- Do not re-investigate or fabricate new evidence
+        - If asked about something outside the investigation scope, politely clarify
+        - Maintain the same professional tone as the original investigation"""
+
+        # Build messages
+        confidence = investigation_result.get('confidence', 0)
+        if isinstance(confidence, str):
+            try:
+                confidence = float(confidence)
+            except ValueError:
+                confidence = 0.0
+        
+        messages = [
+            LLMMessage(role="system", content=system_prompt),
+            LLMMessage(role="user", content=f"Investigation Result:\n{investigation_result.get('explanation', '')}\n\nClassification: {investigation_result.get('classification', '')}\nConfidence: {confidence:.0%}\nEvidence: {', '.join(investigation_result.get('evidence', []))}\nRecommended Action: {investigation_result.get('recommended_action', 'N/A')}"),
+        ]
+
+        # Add chat history (last 5 messages)
+        for msg in chat_history[-5:]:
+            messages.append(LLMMessage(role=msg['role'], content=msg['content']))
+
+        # Add new question
+        messages.append(LLMMessage(role="user", content=new_question))
+
+        # Get response from provider
+        try:
+            response = await self.provider.complete(messages)
+            return response.content
+        except Exception as e:
+            import logging
+            logging.error(f"Follow-up provider error: {type(e).__name__}: {e}")
+            raise
+
+    async def investigate_probable_match(
+        self,
+        db: AsyncSession,
+        match,
+        canonical_txn,
+        matched_txn
+    ) -> dict:
+        """
+        Investigate a probable match (score 0.70-0.89) to determine if it should be confirmed as a match.
+        
+        Args:
+            db: Database session
+            match: The Match object with PROBABLE_MATCH status
+            canonical_txn: The first canonical transaction
+            matched_txn: The second canonical transaction (the match)
+            
+        Returns:
+            dict with keys: confidence, classification, explanation, evidence, recommended_action
+        """
+        # Build system prompt for probable match investigation
+        system_prompt = """You are an AI Finance Investigator evaluating a probable match between two transactions.
+        
+A probable match has been identified with a score between 0.70 and 0.89. This indicates a potential match 
+that needs further investigation before it can be confirmed as a true match.
+
+Your task is to evaluate the evidence and determine if this probable match should be confirmed as a true match.
+
+GUIDELINES:
+- Evaluate the evidence carefully: amounts, dates, counterparties, references, and any other relevant details
+- Consider the match score (0.70-0.89 range) and what it implies about match quality
+- Look for specific evidence supporting or refuting the match
+- Be precise and evidence-based in your assessment
+- If evidence is insufficient, indicate that the match should be escalated for manual review
+- Do not fabricate evidence; only use what is provided
+- If the evidence strongly supports a match, recommend confirmation with high confidence
+- If evidence is weak or contradictory, recommend escalation for manual review
+
+OUTPUT FORMAT (JSON):
+{
+    "confidence": 0.0-1.0,
+    "classification": "confirmed_match" | "no_match" | "insufficient_evidence",
+    "explanation": "Detailed reasoning with specific evidence references",
+    "evidence": ["evidence item 1", "evidence item 2", ...],
+    "recommended_action": "confirm_match" | "escalate" | "reject"
+}"""
+
+        # Build the investigation context
+        messages = [
+            LLMMessage(role="system", content=system_prompt),
+            LLMMessage(role="user", content=f"""
+Probable Match Investigation:
+- Match ID: {match.id}
+- Match Score: {match.score:.2f}
+- Match Method: {match.method}
+- Match Evidence: {', '.join(match.evidence) if match.evidence else 'None'}
+
+Transaction A (Canonical):
+- ID: {canonical_txn.id}
+- Counterparty: {canonical_txn.counterparty}
+- Amount: {canonical_txn.amount} {canonical_txn.currency}
+- Date: {canonical_txn.date}
+- Direction: {canonical_txn.direction}
+- Reference: {canonical_txn.reference or 'None'}
+- Description: {canonical_txn.description or 'None'}
+
+Transaction B (Matched):
+- ID: {matched_txn.id}
+- Counterparty: {matched_txn.counterparty}
+- Amount: {matched_txn.amount} {matched_txn.currency}
+- Date: {matched_txn.date}
+- Direction: {matched_txn.direction}
+- Reference: {matched_txn.reference or 'None'}
+- Description: {matched_txn.description or 'None'}
+
+Evaluate this probable match and determine if it should be confirmed as a true match.
+Return your assessment in the specified JSON format.
+""")
+        ]
+        
+        # Get response from provider
+        try:
+            response = await self.provider.complete(
+                messages,
+                response_format={"type": "json_object"},
+            )
+            
+            import json
+            result = json.loads(response.content)
+            
+            # Validate response structure
+            required_keys = ["confidence", "classification", "explanation", "evidence", "recommended_action"]
+            for key in required_keys:
+                if key not in result:
+                    raise ValueError(f"Missing required key in AI response: {key}")
+            
+            return result
+            
+        except Exception as e:
+            import logging
+            logging.error(f"Probable match investigation error: {type(e).__name__}: {e}")
+            raise
+
     async def _log_audit(self, db: AsyncSession, action: AuditAction, entity_id: int, reason: str):
         log = AuditLog(actor="ai_investigator", entity="exception", entity_id=entity_id, action=action, reason=reason)
         db.add(log)

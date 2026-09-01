@@ -1,7 +1,3 @@
-"""
-Metrics Page - Evaluation metrics with ground truth comparison.
-"""
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -42,13 +38,6 @@ def render_metrics():
     with col2:
         st.metric("AI Accuracy", f"{metrics.get('ai_accuracy', 0):.1f}%")
     
-    # Confusion Matrix
-    st.markdown("### Ground Truth Comparison")
-    
-    # This would need actual confusion matrix data from backend
-    # For now, show placeholder
-    st.info("Ground truth comparison requires running evaluation against ground truth data.")
-    
     # Exception resolution breakdown
     st.markdown("### Exception Resolution")
     
@@ -56,35 +45,47 @@ def render_metrics():
     
     with col1:
         # Resolution breakdown pie chart
-        import plotly.express as px
+        resolved = metrics.get('exceptions_resolved', 0)
+        escalated = metrics.get('exceptions_escalated', 0)
+        unresolved = metrics.get('exceptions_unresolved', 0)
         
-        # Placeholder data - would come from API
-        exc_data = {
-            "Status": ["Resolved", "Escalated", "Unresolved"],
-            "Count": [5, 2, 3]
-        }
-        df = pd.DataFrame(exc_data)
+        if resolved + escalated + unresolved > 0:
+            fig = px.pie(
+                values=[resolved, escalated, unresolved], 
+                names=["Resolved", "Escalated", "Unresolved"],
+                color_discrete_map={
+                    "Resolved": "#00D4AA",
+                    "Escalated": "#F0B429",
+                    "Unresolved": "#FF6B6B",
+                },
+                hole=0.5
+            )
+            fig.update_layout(
+                plot_bgcolor='#0E1117',
+                paper_bgcolor='#0E1117',
+                font_color='#E6EDF3',
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No exception data available")
+    
+    with col2:
+        # Additional metrics
+        st.markdown("#### Summary")
+        st.write(f"**Total Records:** {metrics.get('total_records', 0)}")
+        st.write(f"**Matched Records:** {metrics.get('matched_records', 0)}")
+        st.write(f"**Total Exceptions:** {metrics.get('exceptions_total', 0)}")
+        st.write(f"**Cash Variance:** ₹{float(metrics.get('cash_variance', 0)):,.2f}")
         
-        import plotly.express as px
-        fig = px.pie(
-            values=[5, 2, 3], 
-            names=["Resolved", "Escalated", "Unresolved"],
-            color_discrete_map={
-                "Resolved": "#00D4AA",
-                "Escalated": "#F0B429",
-                "Unresolved": "#FF6B6B",
-            },
-            hole=0.5
-        )
-        fig.update_layout(
-            plot_bgcolor='#0E1117',
-            paper_bgcolor='#0E1117',
-            font_color='#E6EDF3',
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        if metrics.get('total_records', 0) > 0:
+            match_rate = metrics.get('match_rate', 0)
+            if match_rate >= 90:
+                st.success(f"✅ Match rate: {match_rate:.1f}% (Target: ≥90%)")
+            else:
+                st.warning(f"⚠️ Match rate: {match_rate:.1f}% (Target: ≥90%)")
 
 
 if __name__ == "__main__":
     import streamlit as st
-    from dashboard.pages.metrics import render_metrics
+    from dashboard.pages.Metrics import render_metrics
     render_metrics()

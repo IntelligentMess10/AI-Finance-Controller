@@ -1,8 +1,3 @@
-"""
-API Client for AI Finance Controller Dashboard.
-Centralized API client with caching, retries, and error handling.
-"""
-
 import asyncio
 import time
 from typing import Any, Dict, List, Optional, Union
@@ -12,6 +7,10 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 import streamlit as st
+
+
+class APIError(Exception):
+    """Raised when the API client encounters an error."""
 
 
 class APIClient:
@@ -201,10 +200,16 @@ class APIClient:
         page: int = 1,
         limit: int = 50,
         status: str = None,
+        method: str = None,
+        min_score: float = None,
     ) -> Optional[dict]:
         params = {"page": page, "limit": limit}
         if status:
             params["status"] = status
+        if method:
+            params["method"] = method
+        if min_score is not None:
+            params["min_score"] = min_score
         return self.get("/reconciliation/results/paginated", params=params)
     
     def get_exceptions(
@@ -212,7 +217,7 @@ class APIClient:
         status: str = None,
         skip: int = 0,
         limit: int = 100,
-    ) -> Optional[List]:
+) -> Optional[List]:
         params = {"skip": 0, "limit": 100}
         if status:
             params["status"] = status
@@ -220,6 +225,22 @@ class APIClient:
     
     def investigate_exception(self, exc_id: int) -> Optional[dict]:
         return self.post(f"/exceptions/{exc_id}/investigate")
+    
+    def follow_up_exception(
+        self,
+        exc_id: int,
+        question: str,
+        investigation_result: dict,
+        chat_history: list
+    ) -> Optional[dict]:
+        return self.post(
+            f"/exceptions/{exc_id}/followup",
+            json_data={
+                "question": question,
+                "investigation_result": investigation_result,
+                "chat_history": chat_history
+            }
+        )
     
     def get_cash_position(self, date: str = None) -> Optional[dict]:
         params = {"date": date} if date else None
@@ -248,10 +269,16 @@ class APIClient:
         page: int = 1,
         limit: int = 50,
         status: str = None,
+        method: str = None,
+        min_score: float = None,
     ) -> Optional[dict]:
         params = {"page": page, "limit": limit}
         if status:
             params["status"] = status
+        if method:
+            params["method"] = method
+        if min_score is not None:
+            params["min_score"] = min_score
         return self.get("/reconciliation/results/paginated", params=params)
     
     def get_exceptions(self, status: str = None, skip: int = 0, limit: int = 100) -> Optional[List]:
@@ -314,8 +341,11 @@ def api_get(endpoint: str, params: dict = None) -> Optional[Any]:
     try:
         return client.get(endpoint, params=params)
     except Exception as e:
+        message = str(e)
+        if "not found" in message.lower():
+            return None
         import streamlit as st
-        st.error(f"API Error: {str(e)}")
+        st.error(f"API Error: {message}")
         return None
 
 

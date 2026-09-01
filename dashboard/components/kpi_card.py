@@ -1,7 +1,3 @@
-"""
-KPI Card component for displaying key metrics.
-"""
-
 import streamlit as st
 from typing import Optional
 from dashboard.utils.formatters import format_inr, format_pct

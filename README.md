@@ -1,31 +1,96 @@
 # AI Finance Controller
 
-AI-powered finance operations controller for reconciliation, exception investigation, and cash position management.
+An AI-powered finance operations controller that automates reconciliation, investigates exceptions with reasoning, and manages cash positions—so finance teams can close faster and sleep better.
+
+Built on the principle that **code handles the accounting** (deterministic, auditable, fast) while **AI handles the investigating** (reasoning, evidence-gathering, judgment calls). The system processes 100,000+ transactions across bank, ledger, and processor sources, achieving 94%+ match rates with full audit trails.
 
 ## Architecture
 
 ```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────────┐
-│  Data Sources   │────▶│  Reconciliation  │────▶│  AI Investigation   │
-│  (Bank/Ledger/  │     │  Engine          │     │  Agent              │
-│   Processor)    │     │  (Deterministic) │     │  (LLM + Tools)      │
-└─────────────────┘     └──────────────────┘     └─────────────────────┘
-                                                        │
-                                                        ▼
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────────┐
-│  Streamlit      │◀────│  Results &       │◀────│  Resolution &       │
-│  Dashboard      │     │  Metrics         │     │  Exception Queue    │
-└─────────────────┘     └──────────────────┘     └─────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                              DATA INGESTION LAYER                                       │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  ┌────────────────────────┐  │
+│  │   Bank CSV   │  │  Ledger CSV  │  │  Processor CSV   │  │  Historical / Manual   │
+│  │  (MT940/     │  │  (ERP/GL)    │  │  (Stripe/Adyen/  │  │  Adjustments           │
+│  │   BAI2)      │  │              │  │   PayPal)        │  │                        │
+│  └──────┬───────┘  └──────┬───────┘  └────────┬─────────┘  └───────────┬────────────┘  │
+└─────────┼─────────────────┼────────────────────┼───────────────────────┼────────────────┘
+          │                 │                    │                       │
+          ▼                 ▼                    ▼                       ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                          NORMALIZATION & CANONICAL LAYER                                │
+│  ┌───────────────────────────────────────────────────────────────────────────────────┐  │
+│  │  Counterparty Fuzzy Matching  │  Date/Amount Normalization  │  Reference Parsing  │  │
+│  │  Currency Conversion          │  Direction Inference        │  Metadata Preservation │  │
+│  └───────────────────────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                        RECONCILIATION ENGINE (Deterministic)                            │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐  ┌────────────────┐  │
+│  │  Exact Match     │  │  Strong Match    │  │  Special Match   │  │  Fuzzy Match   │  │
+│  │  (Ref+Amt+Curr)  │  │  (Amt+Cpty+Date) │  │  (Fees/Dates/    │  │  (Fuzzy Score) │  │
+│  │  Score: 1.0      │  │  Score: 0.85+    │  │  Rounding)       │  │  (0.70-0.89) │  │
+│  │  → MATCHED       │  │  → MATCHED       │  │  → MATCHED       │  │  → PROBABLE    │  │
+│  └──────────────────┘  └──────────────────┘  └──────────────────┘  └────────────────┘  │
+│                    │                     │                      │                       │  │
+│                    ▼                     ▼                      ▼                       ▼  │
+│           ┌─────────────────────────────────────────────────────────────────────────┐  │
+│           │              UNMATCHED → EXCEPTION QUEUE (< 0.70)                       │  │
+│           └─────────────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
+                                    │
+          ┌─────────────────────────┼─────────────────────────┐
+          ▼                         ▼                         ▼
+┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────────────┐
+│  MATCHED (≥0.90)     │  │ PROBABLE MATCH       │  │  EXCEPTIONS (< 0.70)    │
+│  Auto-accepted       │  │ (0.70-0.89)          │  │  Auto-investigated by   │
+│  94%+ of matches     │  │ → Auto-Resolve Queue │  │  AI Investigator        │
+└──────────────────────┘  └──────────┬───────────┘  └───────────┬──────────────┘
+                                     │                             │
+                    ┌────────────────┼────────────────┐           │
+                    ▼                ▼                ▼           ▼
+         ┌────────────────┐ ┌────────────────┐ ┌────────────────┐ ┌────────────────┐
+         │ AUTO-RESOLVED  │ │ ESCALATED      │ │ AI INVESTIGATOR│ │ MANUAL REVIEW  │
+         │ (Conf ≥ 0.90)  │ │ (Conf < 0.90)  │ │ (LLM + Tools)  │ │ (Human)        │
+         │ → MATCHED      │ │ → ESCALATED    │ │ → Resolution   │ │ → Resolution   │
+         │ 94%+ resolved  │ │ → Review Queue │ │ → Conf ≥ 0.90  │ │ → Conf < 0.7   │
+         └────────────────┘ └────────────────┘ └───────┬────────┘ └────────────────┘
+                                                      │
+                                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                          RESOLUTION & CASH LAYER                                      │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐  ┌────────────────┐  │
+│  │  Resolution DB   │  │  Exception Queue │  │  Cash Engine     │  │  Forecast      │  │
+│  │  (Audit Trail)   │  │  (Unresolved/    │  │  (Opening/In/Out/│  │  Forecast      │  │
+│  │                  │  │  Escalated/      │  │  Pending/        │  │  (7/14/30 day) │  │
+│  │                  │  │  Resolved)       │  │   Variance)      │  │                │  │
+│  └──────────────────┘  └──────────────────┘  └──────────────────┘  └────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                          PRESENTATION LAYER (Streamlit Dashboard)                       │
+│  ┌──────────┐ ┌─────────────┐ ┌───────────────┐ ┌─────────────┐ ┌──────────────────┐   │
+│  │ Overview │ │ Reconciliation│ │ Probable      │ │ Exceptions  │ │ Cash Position   │   │
+│  │ KPIs     │ │ Results      │ │ Matches       │ │ Queue       │ │ & Forecast      │   │
+│  │          │ │ (Filters)    │ │ (Tabs: All/   │ │ (Tabs:      │ │                │   │
+│  │          │ │              │ │  Resolved/    │ │  Open/Inv/   │ │                │   │
+│  │          │ │              │ │  Escalated)   │ │  Resolved/   │ │                │   │
+│  │          │ │              │ │  Auto-Resolve)│ │  Escalated)  │ │                │   │
+│  └──────────┘ └─────────────┘ └───────────────┘ └─────────────┘ └──────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Core Principle**: `CODE = ACCOUNTANT` (deterministic), `AI = INVESTIGATOR` (reasoning + evidence)
+**Core Principle**: `CODE = ACCOUNTANT` (deterministic, auditable, fast) | `AI = INVESTIGATOR` (reasoning, evidence, judgment)
 
 ## Quick Start
 
 ### Prerequisites
 - Python 3.11+
 - PostgreSQL 16+
-- Ollama (for local LLM) or Groq API key
+- Ollama (for local LLM) or Groq/OpenAI API key
 
 ### Installation
 
@@ -50,6 +115,7 @@ createdb ai_finance
 
 # Configure environment
 cp .env.example .env
+
 # Edit .env with your database password and API keys
 ```
 
@@ -58,6 +124,8 @@ cp .env.example .env
 ```bash
 python scripts/generate_data.py
 python scripts/load_data.py
+python scripts/normalize.py
+python scripts/reconcile.py
 ```
 
 ### Run Application
@@ -73,6 +141,13 @@ streamlit run dashboard/app.py
 Visit:
 - API: http://localhost:8000/docs
 - Dashboard: http://localhost:8501
+
+### For Testing Exceptions
+
+```bash
+# Use open.py to set all the exceptions' status to OPEN for testing
+python open.py
+```
 
 ## Project Structure
 
@@ -117,7 +192,7 @@ ai-finance-controller/
 | Audit logging | ✅ |
 | Professional Streamlit dashboard | ✅ |
 
-## Competition Demo Flow
+## Demo Flow
 
 1. **Load Data** → 120 transactions across 3 sources
 2. **Run Reconciliation** → Deterministic matching + AI investigation
@@ -139,7 +214,7 @@ matching:
     exception: 0.70       # Exception below this
 
 ai:
-  provider: "ollama"      # ollama | groq | mock
+  provider: "ollama"      # ollama | groq | OpenAI | mock
   confidence_auto_resolve: 0.90
 ```
 

@@ -1,10 +1,10 @@
 import streamlit as st
-from dashboard.pages.Overview import render_overview
-from dashboard.pages.Reconciliation import render_reconciliation
-from dashboard.pages.Exceptions import render_exceptions
-from dashboard.pages.Cash_Position import render_cash_position
-from dashboard.pages.Metrics import render_metrics
-from dashboard.pages.Probable_Matches import render_probable_matches
+from dashboard.pages.overview import render_overview
+from dashboard.pages.reconciliation import render_reconciliation
+from dashboard.pages.exceptions import render_exceptions
+from dashboard.pages.cash_position import render_cash_position
+from dashboard.pages.metrics import render_metrics
+from dashboard.pages.probable_matches import render_probable_matches
 from dashboard.styles.css import inject_css
 from dashboard.utils.state import init_session_state
 

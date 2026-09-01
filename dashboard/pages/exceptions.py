@@ -53,5 +53,5 @@ def render_exceptions():
 
 if __name__ == "__main__":
     import streamlit as st
-    from dashboard.pages.Exceptions import render_exceptions
+    from dashboard.pages.exceptions import render_exceptions
     render_exceptions()

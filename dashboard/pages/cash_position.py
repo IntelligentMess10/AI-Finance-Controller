@@ -40,5 +40,5 @@ def render_cash_position():
 
 if __name__ == "__main__":
     import streamlit as st
-    from dashboard.pages.Cash_Position import render_cash_position
+    from dashboard.pages.cash_position import render_cash_position
     render_cash_position()

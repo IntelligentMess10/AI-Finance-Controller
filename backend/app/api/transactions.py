@@ -101,7 +101,6 @@ router_exceptions = APIRouter(prefix="/exceptions", tags=["exceptions"])
 async def run_reconciliation(request: dict, db: AsyncSession = Depends(get_db)):
     import time
     from backend.app.services.matching import ReconciliationEngine
-    from backend.app.services.ai_investigator import AIInvestigator
     from backend.app.services.cash_engine import CashEngine
     from backend.app.config import get_settings
     from backend.app.schemas.canonical import ReconciliationRunResponse, ReconciliationStats
@@ -111,7 +110,6 @@ async def run_reconciliation(request: dict, db: AsyncSession = Depends(get_db)):
     start_time = time.time()
     settings = get_settings()
     engine = ReconciliationEngine(settings.matching)
-    ai = AIInvestigator(settings.ai)
     cash = CashEngine(settings.app.opening_cash)
     
     # Get all canonical transactions
@@ -144,37 +142,11 @@ async def run_reconciliation(request: dict, db: AsyncSession = Depends(get_db)):
     
     # Run reconciliation
     engine = ReconciliationEngine(settings.matching)
-    ai = AIInvestigator(settings.ai)
     cash = CashEngine(settings.app.opening_cash)
     
     result = await engine.run(db, transactions)
     all_matches = result["matches"]
     all_exceptions = result["exceptions"]
-    
-    # AI investigation for exceptions
-    ai = AIInvestigator(settings.ai)
-    
-    for exc in result["exceptions"]:
-        try:
-            exc_result = await db.execute(select(Exception).where(Exception.id == exc.id))
-            exc_obj = exc_result.scalar_one_or_none()
-            if exc_obj:
-                resolution = await ai.investigate(db, exc_obj)
-                if resolution.confidence < settings.ai.confidence_auto_resolve:
-                    resolution.status = ResolutionStatus.ESCALATED
-                    resolution.explanation += f" [Auto-escalated: confidence {resolution.confidence:.2f} below threshold {settings.ai.confidence_auto_resolve}]"
-                
-                resolution.validated = True
-                db.add(resolution)
-                await db.commit()
-                await db.refresh(resolution)
-                
-                exc_obj.status = resolution.status
-                await db.commit()
-        except builtins.Exception as e:
-            # Auto-escalate on any error
-            await ai.close()
-            raise HTTPException(500, f"Investigation failed: {str(e)}")
     
     # Calculate cash position
     cash_position = await cash.calculate_position(db)
